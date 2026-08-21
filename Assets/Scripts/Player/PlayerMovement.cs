@@ -70,14 +70,18 @@ public class PlayerMovement : MonoBehaviour
                 moveDirection * moveSpeed * Time.deltaTime
             );
 
-            // Rotate character toward movement direction.
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            // Rotate toward movement direction only in third person.
+            if (CameraManager.Instance == null ||
+                !CameraManager.Instance.IsFirstPerson)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
 
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                rotationSpeed * Time.deltaTime
-            );
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    targetRotation,
+                    rotationSpeed * Time.deltaTime
+                );
+            }
         }
     }
 

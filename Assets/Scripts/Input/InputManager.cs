@@ -6,7 +6,10 @@ public class InputManager : MonoBehaviour
     public static InputManager Instance { get; private set; }
 
     public Vector2 MoveInput { get; private set; }
+    public Vector2 LookInput { get; private set; }
+
     public bool JumpPressed { get; private set; }
+    public bool CameraTogglePressed { get; private set; }
 
     private void Awake()
     {
@@ -22,7 +25,9 @@ public class InputManager : MonoBehaviour
     private void Update()
     {
         ReadMovementInput();
+        ReadLookInput();
         ReadJumpInput();
+        ReadCameraInput();
     }
 
     private void ReadMovementInput()
@@ -54,9 +59,26 @@ public class InputManager : MonoBehaviour
         MoveInput = Vector2.ClampMagnitude(MoveInput, 1f);
     }
 
+    private void ReadLookInput()
+    {
+        if (Mouse.current == null)
+        {
+            LookInput = Vector2.zero;
+            return;
+        }
+
+        LookInput = Mouse.current.delta.ReadValue();
+    }
+
     private void ReadJumpInput()
     {
         JumpPressed = Keyboard.current != null &&
                       Keyboard.current.spaceKey.wasPressedThisFrame;
+    }
+
+    private void ReadCameraInput()
+    {
+        CameraTogglePressed = Keyboard.current != null &&
+                              Keyboard.current.vKey.wasPressedThisFrame;
     }
 }
