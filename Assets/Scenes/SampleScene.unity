@@ -162,7 +162,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 60
+    FieldOfView: 80
     OrthographicSize: 5
     NearClipPlane: 0.3
     FarClipPlane: 1000
@@ -234,6 +234,7 @@ GameObject:
   - component: {fileID: 170949886}
   - component: {fileID: 170949885}
   - component: {fileID: 170949887}
+  - component: {fileID: 170949888}
   m_Layer: 0
   m_Name: Player 1
   m_TagString: Untagged
@@ -316,6 +317,19 @@ MonoBehaviour:
   minPitch: -80
   maxPitch: 80
   firstPersonTarget: {fileID: 542655559}
+--- !u!114 &170949888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 170949883}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77c1b88b3dd9dc94582e10d3c1e7d9a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RespawnManager
+  deadlineCollider: {fileID: 884563970}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
