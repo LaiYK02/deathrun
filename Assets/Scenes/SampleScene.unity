@@ -271,10 +271,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bde475f88d842214ba7cb30784abd1ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
-  moveSpeed: 5
-  rotationSpeed: 10
+  currentState: 0
+  maxSpeed: 7
+  groundAcceleration: 30
+  groundFriction: 8
+  stopSpeed: 2
+  airAcceleration: 12
+  airWishSpeed: 1.5
   jumpHeight: 2
   gravity: -20
+  jumpBufferTime: 0.15
+  rotationSpeed: 10
   cameraTransform: {fileID: 330585546}
 --- !u!143 &170949886
 CharacterController:
@@ -298,7 +305,7 @@ CharacterController:
   m_Radius: 0.5
   m_SlopeLimit: 45
   m_StepOffset: 0.3
-  m_SkinWidth: 0.08
+  m_SkinWidth: 0.0001
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &170949887
