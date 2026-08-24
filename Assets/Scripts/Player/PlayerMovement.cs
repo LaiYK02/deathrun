@@ -132,8 +132,6 @@ public class PlayerMovement : MonoBehaviour
             wishSpeed,
             groundAcceleration
         );
-
-        RotatePlayer(wishDirection);
     }
 
     private void HandleAirMovement()
@@ -344,29 +342,6 @@ public class PlayerMovement : MonoBehaviour
             velocity.x,
             0f,
             velocity.z
-        );
-    }
-
-    private void RotatePlayer(Vector3 wishDirection)
-    {
-        // First person:
-        // PlayerLookManager controls horizontal rotation.
-        if (CameraManager.Instance != null &&
-            CameraManager.Instance.IsFirstPerson)
-        {
-            return;
-        }
-
-        if (wishDirection.sqrMagnitude <= 0.001f)
-            return;
-
-        Quaternion targetRotation =
-            Quaternion.LookRotation(wishDirection);
-
-        transform.rotation = Quaternion.Slerp(
-            transform.rotation,
-            targetRotation,
-            rotationSpeed * Time.deltaTime
         );
     }
 

@@ -13,6 +13,10 @@ public class PlayerLookManager : MonoBehaviour
     [Header("First Person Camera")]
     [SerializeField] private Transform firstPersonTarget;
 
+    [Header("Third Person Camera")]
+    [SerializeField] private Transform cameraTransform;
+    [SerializeField] private float playerRotationSpeed = 10f;
+
     private float pitch;
 
     private void Start()
@@ -24,6 +28,12 @@ public class PlayerLookManager : MonoBehaviour
             if (pitch > 180f)
                 pitch -= 360f;
         }
+
+        // Automatically find Main Camera if none is assigned
+        if (cameraTransform == null && Camera.main != null)
+        {
+            cameraTransform = Camera.main.transform;
+        }
     }
 
     private void Update()
@@ -31,32 +41,69 @@ public class PlayerLookManager : MonoBehaviour
         if (InputManager.Instance == null)
             return;
 
-        HandleLook();
+        if (CameraManager.Instance == null)
+            return;
+
+        if (CameraManager.Instance.IsFirstPerson)
+        {
+            HandleFirstPersonLook();
+        }
+        else
+        {
+            HandleThirdPersonLook();
+        }
     }
 
-    private void HandleLook()
+    // =========================================================
+    // FIRST PERSON LOOK
+    // =========================================================
+
+    private void HandleFirstPersonLook()
     {
         Vector2 lookInput = InputManager.Instance.LookInput;
-
-        if (lookInput.sqrMagnitude <= 0.001f)
-            return;
 
         float mouseX = lookInput.x * horizontalSensitivity;
         float mouseY = lookInput.y * verticalSensitivity;
 
-        // Horizontal rotation rotates the player.
+        // Horizontal camera/player rotation
         transform.Rotate(Vector3.up * mouseX);
 
-        // Vertical rotation controls the first-person camera target.
+        // Vertical camera rotation
         pitch -= mouseY;
         pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
         if (firstPersonTarget != null)
         {
-            firstPersonTarget.localRotation = Quaternion.Euler(
-                pitch,
-                0f,
-                0f
+            firstPersonTarget.localRotation =
+                Quaternion.Euler(pitch, 0f, 0f);
+        }
+    }
+
+    // =========================================================
+    // THIRD PERSON LOOK
+    // =========================================================
+
+    private void HandleThirdPersonLook()
+    {
+        if (cameraTransform == null)
+            return;
+
+        Vector3 cameraForward = cameraTransform.forward;
+
+        // Ignore camera's vertical pitch.
+        cameraForward.y = 0f;
+
+        if (cameraForward.sqrMagnitude > 0.001f)
+        {
+            cameraForward.Normalize();
+
+            Quaternion targetRotation =
+                Quaternion.LookRotation(cameraForward, Vector3.up);
+
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                targetRotation,
+                playerRotationSpeed * Time.deltaTime
             );
         }
     }

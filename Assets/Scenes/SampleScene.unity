@@ -325,6 +325,8 @@ MonoBehaviour:
   minPitch: -80
   maxPitch: 80
   firstPersonTarget: {fileID: 542655559}
+  cameraTransform: {fileID: 330585546}
+  playerRotationSpeed: 10
 --- !u!114 &170949888
 MonoBehaviour:
   m_ObjectHideFlags: 0
