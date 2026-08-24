@@ -3,7 +3,8 @@ using UnityEngine;
 public class PlayerLookManager : MonoBehaviour
 {
     [Header("Look Settings")]
-    [SerializeField] private float mouseSensitivity = 0.1f;
+    [SerializeField] private float horizontalSensitivity = 0.2f;
+    [SerializeField] private float verticalSensitivity = 0.08f;
 
     [Header("Vertical Look")]
     [SerializeField] private float minPitch = -80f;
@@ -40,8 +41,8 @@ public class PlayerLookManager : MonoBehaviour
         if (lookInput.sqrMagnitude <= 0.001f)
             return;
 
-        float mouseX = lookInput.x * mouseSensitivity;
-        float mouseY = lookInput.y * mouseSensitivity;
+        float mouseX = lookInput.x * horizontalSensitivity;
+        float mouseY = lookInput.y * verticalSensitivity;
 
         // Horizontal rotation rotates the player.
         transform.Rotate(Vector3.up * mouseX);
