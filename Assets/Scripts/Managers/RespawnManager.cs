@@ -6,6 +6,12 @@ public class RespawnManager : MonoBehaviour
     [Header("Deadline")]
     [SerializeField] private Collider deadlineCollider;
 
+    [Header("Player Model")]
+    [SerializeField] private Transform playerModel;
+
+    private Vector3 modelLocalPosition;
+    private Quaternion modelLocalRotation;
+
     private CharacterController characterController;
 
     private Vector3 respawnPosition;
@@ -18,6 +24,12 @@ public class RespawnManager : MonoBehaviour
         // Save the player's starting position.
         respawnPosition = transform.position;
         respawnRotation = transform.rotation;
+
+        if (playerModel != null)
+        {
+            modelLocalPosition = playerModel.localPosition;
+            modelLocalRotation = playerModel.localRotation;
+        }
     }
 
     private void OnControllerColliderHit(ControllerColliderHit hit)
@@ -36,10 +48,16 @@ public class RespawnManager : MonoBehaviour
         // Disable CharacterController before teleporting.
         characterController.enabled = false;
 
+        // Reset Player1 position and rotation.
         transform.position = respawnPosition;
         transform.rotation = respawnRotation;
 
-        characterController.enabled = true;
+        // Reset SWAT model position and rotation.
+        if (playerModel != null)
+        {
+            playerModel.localPosition = modelLocalPosition;
+            playerModel.localRotation = modelLocalRotation;
+        }
 
         // Reset movement velocity.
         PlayerMovement playerMovement = GetComponent<PlayerMovement>();
@@ -48,5 +66,8 @@ public class RespawnManager : MonoBehaviour
         {
             playerMovement.ResetVelocity();
         }
+
+        // Re-enable CharacterController.
+        characterController.enabled = true;
     }
 }
