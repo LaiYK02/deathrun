@@ -1,7 +1,8 @@
 using UnityEngine;
+using Unity.Netcode;
 using TMPro;
 
-public class SpeedDisplay : MonoBehaviour
+public class SpeedDisplay : NetworkBehaviour
 {
     [Header("References")]
     [SerializeField] private PlayerMovement playerMovement;
@@ -13,11 +14,15 @@ public class SpeedDisplay : MonoBehaviour
 
     private void Update()
     {
+        if (!IsOwner)
+            return;
+
         if (playerMovement == null || speedText == null)
             return;
 
         float speed = playerMovement.CurrentSpeed;
 
-        speedText.text = prefix + speed.ToString($"F{decimalPlaces}");
+        speedText.text =
+            prefix + speed.ToString($"F{decimalPlaces}");
     }
 }

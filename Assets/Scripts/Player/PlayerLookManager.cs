@@ -1,6 +1,7 @@
 using UnityEngine;
+using Unity.Netcode;
 
-public class PlayerLookManager : MonoBehaviour
+public class PlayerLookManager : NetworkBehaviour
 {
     [Header("Look Settings")]
     [SerializeField] private float horizontalSensitivity = 0.2f;
@@ -46,6 +47,9 @@ public class PlayerLookManager : MonoBehaviour
 
     private void Update()
     {
+        if (!IsOwner)
+            return;
+
         if (InputManager.Instance == null)
             return;
 
@@ -54,12 +58,10 @@ public class PlayerLookManager : MonoBehaviour
 
         if (CameraManager.Instance.IsFirstPerson)
         {
-            SetPlayerModelVisible(false);
             HandleFirstPersonLook();
         }
         else
         {
-            SetPlayerModelVisible(true);
             HandleThirdPersonLook();
         }
     }
