@@ -1,7 +1,8 @@
 using UnityEngine;
+using Unity.Netcode;
 
 [RequireComponent(typeof(CharacterController))]
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : NetworkBehaviour
 {
     public enum MovementState
     {
@@ -66,6 +67,9 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        if (!IsOwner)
+            return;
+
         UpdateJumpBuffer();
         UpdateMovementState();
 
