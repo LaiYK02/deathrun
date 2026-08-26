@@ -18,10 +18,16 @@ public class GameManager : MonoBehaviour
         Screen.fullScreen = true;
     }
 
+    //private void SetupCursor()
+    //{
+    //    // Hide and lock the cursor in the center of the screen.
+    //    Cursor.visible = false;
+    //    Cursor.lockState = CursorLockMode.Locked;
+    //}
+
     private void SetupCursor()
     {
-        // Hide and lock the cursor in the center of the screen.
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
     }
 }

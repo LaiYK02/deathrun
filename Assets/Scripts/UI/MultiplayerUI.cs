@@ -5,6 +5,7 @@ using Unity.Netcode;
 public class MultiplayerUI : MonoBehaviour
 {
     [Header("UI References")]
+    [SerializeField] private GameObject multiplayerPanel;
     [SerializeField] private TMP_InputField ipInputField;
     [SerializeField] private TMP_Text statusText;
 
@@ -25,14 +26,16 @@ public class MultiplayerUI : MonoBehaviour
     public void HostGame()
     {
         if (networkSessionManager == null)
-        {
-            SetStatus("Network manager not assigned.");
             return;
-        }
 
         SetStatus("Starting host...");
 
         networkSessionManager.StartHost();
+
+        if (NetworkManager.Singleton.IsHost)
+        {
+            multiplayerPanel.SetActive(false);
+        }
     }
 
     public void JoinGame()

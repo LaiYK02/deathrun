@@ -2,23 +2,34 @@ using UnityEngine;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 
+[RequireComponent(typeof(NetworkManager))]
+[RequireComponent(typeof(UnityTransport))]
 public class NetworkSessionManager : MonoBehaviour
 {
     [Header("Connection")]
     [SerializeField] private string hostAddress = "127.0.0.1";
     [SerializeField] private ushort port = 7777;
 
+    private NetworkManager networkManager;
     private UnityTransport transport;
 
     private void Awake()
     {
-        transport =
-            NetworkManager.Singleton.GetComponent<UnityTransport>();
+        // Get the components directly from this GameObject.
+        networkManager = GetComponent<NetworkManager>();
+        transport = GetComponent<UnityTransport>();
+
+        if (networkManager == null)
+        {
+            Debug.LogError(
+                "NetworkSessionManager: NetworkManager component not found."
+            );
+        }
 
         if (transport == null)
         {
             Debug.LogError(
-                "NetworkSessionManager: UnityTransport not found."
+                "NetworkSessionManager: UnityTransport component not found."
             );
         }
     }
@@ -30,17 +41,17 @@ public class NetworkSessionManager : MonoBehaviour
 
     public void StartHost()
     {
-        if (transport == null)
+        if (networkManager == null || transport == null)
             return;
 
-        // Listen on all local interfaces.
+        // Listen on all local network interfaces.
         transport.SetConnectionData(
             "0.0.0.0",
             port,
             "0.0.0.0"
         );
 
-        if (!NetworkManager.Singleton.StartHost())
+        if (!networkManager.StartHost())
         {
             Debug.LogError("Failed to start Host.");
         }
@@ -54,7 +65,7 @@ public class NetworkSessionManager : MonoBehaviour
 
     public void StartClient()
     {
-        if (transport == null)
+        if (networkManager == null || transport == null)
             return;
 
         transport.SetConnectionData(
@@ -62,7 +73,7 @@ public class NetworkSessionManager : MonoBehaviour
             port
         );
 
-        if (!NetworkManager.Singleton.StartClient())
+        if (!networkManager.StartClient())
         {
             Debug.LogError(
                 $"Failed to connect to {hostAddress}:{port}"
@@ -78,9 +89,10 @@ public class NetworkSessionManager : MonoBehaviour
 
     public void Shutdown()
     {
-        if (NetworkManager.Singleton.IsListening)
+        if (networkManager != null &&
+            networkManager.IsListening)
         {
-            NetworkManager.Singleton.Shutdown();
+            networkManager.Shutdown();
         }
     }
 }
