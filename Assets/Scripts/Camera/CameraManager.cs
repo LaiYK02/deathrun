@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Cinemachine;
+using Unity.Netcode;
 
 public class CameraManager : MonoBehaviour
 {
@@ -16,7 +17,12 @@ public class CameraManager : MonoBehaviour
     [SerializeField] private int activePriority = 10;
     [SerializeField] private int inactivePriority = 0;
 
+    [Header("Camera Target")]
+    [SerializeField] private float targetSearchDelay = 0.2f;
+
     public bool IsFirstPerson { get; private set; }
+
+    private bool camerasBound = false;
 
     private void Awake()
     {
@@ -34,6 +40,13 @@ public class CameraManager : MonoBehaviour
     private void Start()
     {
         SetThirdPersonView();
+
+        // Network player may not exist yet.
+        InvokeRepeating(
+            nameof(TryBindToLocalPlayer),
+            0.1f,
+            targetSearchDelay
+        );
     }
 
     private void Update()
@@ -47,21 +60,92 @@ public class CameraManager : MonoBehaviour
         }
     }
 
-    private void SetupInstantCameraSwitch()
+    // =========================================================
+    // FIND LOCAL PLAYER
+    // =========================================================
+
+    private void TryBindToLocalPlayer()
     {
-        if (cinemachineBrain == null)
-        {
-            Debug.LogError("CameraManager: Cinemachine Brain is not assigned.");
+        if (camerasBound)
             return;
+
+        if (NetworkManager.Singleton == null)
+            return;
+
+        if (!NetworkManager.Singleton.IsClient)
+            return;
+
+        NetworkObject localPlayer =
+            NetworkManager.Singleton.LocalClient?.PlayerObject;
+
+        if (localPlayer == null)
+            return;
+
+        BindCamerasToPlayer(localPlayer.transform);
+
+        camerasBound = true;
+
+        CancelInvoke(nameof(TryBindToLocalPlayer));
+    }
+
+    // =========================================================
+    // BIND CAMERAS
+    // =========================================================
+
+    private void BindCamerasToPlayer(Transform player)
+    {
+        if (player == null)
+            return;
+
+        // Find the first-person target inside the local player.
+        Transform firstPersonTarget =
+            player.Find("FirstPerson Target");
+
+        if (firstPersonTarget == null)
+        {
+            Debug.LogWarning(
+                "CameraManager: FirstPerson Target was not found."
+            );
         }
 
-        // Disable blending so camera switches happen instantly.
-        cinemachineBrain.DefaultBlend =
-            new CinemachineBlendDefinition(
-                CinemachineBlendDefinition.Styles.Cut,
-                0f
-            );
+        // -----------------------------------------------------
+        // THIRD PERSON CAMERA
+        // -----------------------------------------------------
+
+        if (thirdPersonCamera != null)
+        {
+            Transform target =
+                firstPersonTarget != null
+                    ? firstPersonTarget
+                    : player;
+
+            thirdPersonCamera.Follow = target;
+            thirdPersonCamera.LookAt = target;
+        }
+
+        // -----------------------------------------------------
+        // FIRST PERSON CAMERA
+        // -----------------------------------------------------
+
+        if (firstPersonCamera != null)
+        {
+            Transform target =
+                firstPersonTarget != null
+                    ? firstPersonTarget
+                    : player;
+
+            firstPersonCamera.Follow = target;
+            firstPersonCamera.LookAt = target;
+        }
+
+        Debug.Log(
+            $"CameraManager: Cameras bound to {player.name}."
+        );
     }
+
+    // =========================================================
+    // CAMERA SWITCHING
+    // =========================================================
 
     public void ToggleCameraView()
     {
@@ -79,15 +163,51 @@ public class CameraManager : MonoBehaviour
     {
         IsFirstPerson = false;
 
-        thirdPersonCamera.Priority = activePriority;
-        firstPersonCamera.Priority = inactivePriority;
+        if (thirdPersonCamera != null)
+        {
+            thirdPersonCamera.Priority = activePriority;
+        }
+
+        if (firstPersonCamera != null)
+        {
+            firstPersonCamera.Priority = inactivePriority;
+        }
     }
 
     private void SetFirstPersonView()
     {
         IsFirstPerson = true;
 
-        thirdPersonCamera.Priority = inactivePriority;
-        firstPersonCamera.Priority = activePriority;
+        if (thirdPersonCamera != null)
+        {
+            thirdPersonCamera.Priority = inactivePriority;
+        }
+
+        if (firstPersonCamera != null)
+        {
+            firstPersonCamera.Priority = activePriority;
+        }
+    }
+
+    // =========================================================
+    // CINEMACHINE
+    // =========================================================
+
+    private void SetupInstantCameraSwitch()
+    {
+        if (cinemachineBrain == null)
+        {
+            Debug.LogError(
+                "CameraManager: Cinemachine Brain is not assigned."
+            );
+
+            return;
+        }
+
+        cinemachineBrain.DefaultBlend =
+            new CinemachineBlendDefinition(
+                CinemachineBlendDefinition.Styles.Cut,
+                0f
+            );
     }
 }

@@ -21,6 +21,8 @@ public class PlayerLookManager : NetworkBehaviour
     [SerializeField] private Transform cameraTransform;
     [SerializeField] private float playerRotationSpeed = 10f;
 
+    private bool lastFirstPersonState;
+
     private float pitch;
 
     private void Start()
@@ -33,28 +35,61 @@ public class PlayerLookManager : NetworkBehaviour
                 pitch -= 360f;
         }
 
-        // Automatically find Main Camera if none is assigned
+        // Only the local player controls their own camera/model.
+        if (!IsOwner)
+        {
+            SetPlayerModelVisible(true);
+            return;
+        }
+
         if (cameraTransform == null && Camera.main != null)
         {
             cameraTransform = Camera.main.transform;
         }
 
-        if (playerModel != null)
+        if (CameraManager.Instance != null)
         {
-            SetPlayerModelVisible(!CameraManager.Instance.IsFirstPerson);
+            lastFirstPersonState =
+                CameraManager.Instance.IsFirstPerson;
+
+            SetPlayerModelVisible(
+                !lastFirstPersonState
+            );
         }
     }
 
     private void Update()
     {
+        // Remote players should always be visible
+        // and should never control the local camera.
         if (!IsOwner)
+        {
+            if (playerModel != null)
+            {
+                SetPlayerModelVisible(true);
+            }
+
             return;
+        }
 
         if (InputManager.Instance == null)
             return;
 
         if (CameraManager.Instance == null)
             return;
+
+        // Detect camera mode change.
+        bool currentFirstPersonState =
+            CameraManager.Instance.IsFirstPerson;
+
+        if (currentFirstPersonState != lastFirstPersonState)
+        {
+            lastFirstPersonState = currentFirstPersonState;
+
+            SetPlayerModelVisible(
+                !currentFirstPersonState
+            );
+        }
 
         if (CameraManager.Instance.IsFirstPerson)
         {
