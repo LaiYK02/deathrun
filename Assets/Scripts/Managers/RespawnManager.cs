@@ -1,11 +1,9 @@
+using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
-public class RespawnManager : MonoBehaviour
+public class RespawnManager : NetworkBehaviour
 {
-    [Header("Deadline")]
-    [SerializeField] private Collider deadlineCollider;
-
     [Header("Player Model")]
     [SerializeField] private Transform playerModel;
 
@@ -14,16 +12,15 @@ public class RespawnManager : MonoBehaviour
 
     private CharacterController characterController;
 
+    // Stored by the server.
     private Vector3 respawnPosition;
     private Quaternion respawnRotation;
+
+    private bool respawnRequested;
 
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
-
-        // Save the player's starting position.
-        respawnPosition = transform.position;
-        respawnRotation = transform.rotation;
 
         if (playerModel != null)
         {
@@ -32,27 +29,71 @@ public class RespawnManager : MonoBehaviour
         }
     }
 
-    private void OnControllerColliderHit(ControllerColliderHit hit)
+    public override void OnNetworkSpawn()
     {
-        if (deadlineCollider == null)
-            return;
+        base.OnNetworkSpawn();
 
-        if (hit.collider != deadlineCollider)
-            return;
-
-        Respawn();
+        // The server records the initial spawn position.
+        if (IsServer)
+        {
+            respawnPosition = transform.position;
+            respawnRotation = transform.rotation;
+        }
     }
 
-    public void Respawn()
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        // Only the local player should request its own respawn.
+        if (!IsOwner)
+            return;
+
+        // Only react to the Deadline.
+        if (!hit.collider.CompareTag("Deadline"))
+            return;
+
+        // Prevent multiple requests while touching the Deadline.
+        if (respawnRequested)
+            return;
+
+        respawnRequested = true;
+
+        RequestRespawnServerRpc();
+    }
+
+    [ServerRpc]
+    private void RequestRespawnServerRpc()
+    {
+        // Server decides whether this player should respawn.
+        SendRespawnToOwnerClientRpc(
+            respawnPosition,
+            respawnRotation
+        );
+    }
+
+    [ClientRpc]
+    private void SendRespawnToOwnerClientRpc(
+        Vector3 position,
+        Quaternion rotation)
+    {
+        // Only the owner should perform the actual teleport.
+        if (!IsOwner)
+            return;
+
+        PerformLocalRespawn(position, rotation);
+    }
+
+    private void PerformLocalRespawn(
+        Vector3 position,
+        Quaternion rotation)
     {
         // Disable CharacterController before teleporting.
         characterController.enabled = false;
 
-        // Reset Player1 position and rotation.
-        transform.position = respawnPosition;
-        transform.rotation = respawnRotation;
+        // Move the player's own authoritative Transform.
+        transform.position = position;
+        transform.rotation = rotation;
 
-        // Reset SWAT model position and rotation.
+        // Reset model.
         if (playerModel != null)
         {
             playerModel.localPosition = modelLocalPosition;
@@ -60,7 +101,8 @@ public class RespawnManager : MonoBehaviour
         }
 
         // Reset movement velocity.
-        PlayerMovement playerMovement = GetComponent<PlayerMovement>();
+        PlayerMovement playerMovement =
+            GetComponent<PlayerMovement>();
 
         if (playerMovement != null)
         {
@@ -69,5 +111,26 @@ public class RespawnManager : MonoBehaviour
 
         // Re-enable CharacterController.
         characterController.enabled = true;
+
+        respawnRequested = false;
+    }
+
+    public void Respawn()
+    {
+        // For other scripts that may manually request a respawn.
+        if (!IsOwner)
+            return;
+
+        if (IsServer)
+        {
+            PerformLocalRespawn(
+                respawnPosition,
+                respawnRotation
+            );
+        }
+        else
+        {
+            RequestRespawnServerRpc();
+        }
     }
 }

@@ -26,7 +26,7 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private float airWishSpeed = 1.5f;
 
     [Header("Jump")]
-    [SerializeField] private float jumpHeight = 2f;
+    [SerializeField] private float jumpHeight = 1.2f;
     [SerializeField] private float gravity = -20f;
 
     [Header("Jump Buffer")]
