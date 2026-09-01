@@ -12,7 +12,6 @@ public class RespawnManager : NetworkBehaviour
 
     private CharacterController characterController;
 
-    // Stored by the server.
     private Vector3 respawnPosition;
     private Quaternion respawnRotation;
 
@@ -33,25 +32,92 @@ public class RespawnManager : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
-        // The server records the initial spawn position.
         if (IsServer)
         {
-            respawnPosition = transform.position;
-            respawnRotation = transform.rotation;
+            AssignRespawnPoint();
+        }
+
+        // Wait until the server has assigned the spawn point,
+        // then send the correct position to the owner.
+        if (IsServer)
+        {
+            SendInitialSpawnToOwner();
         }
     }
 
-    private void OnControllerColliderHit(ControllerColliderHit hit)
+    private void AssignRespawnPoint()
     {
-        // Only the local player should request its own respawn.
+        if (SpawnPointsManager.Instance == null)
+        {
+            Debug.LogError(
+                "RespawnManager: SpawnPointsManager not found!"
+            );
+
+            respawnPosition = transform.position;
+            respawnRotation = transform.rotation;
+
+            return;
+        }
+
+        Transform spawnPoint =
+            SpawnPointsManager.Instance.GetSpawnPoint(
+                OwnerClientId
+            );
+
+        if (spawnPoint == null)
+        {
+            Debug.LogError(
+                $"RespawnManager: Could not find spawn point " +
+                $"for Client {OwnerClientId}."
+            );
+
+            respawnPosition = transform.position;
+            respawnRotation = transform.rotation;
+
+            return;
+        }
+
+        respawnPosition = spawnPoint.position;
+        respawnRotation = spawnPoint.rotation;
+
+        Debug.Log(
+            $"Player {OwnerClientId} assigned to " +
+            $"{spawnPoint.name} at {spawnPoint.position}"
+        );
+    }
+
+    private void SendInitialSpawnToOwner()
+    {
+        SendInitialSpawnToOwnerClientRpc(
+            respawnPosition,
+            respawnRotation
+        );
+    }
+
+    [ClientRpc]
+    private void SendInitialSpawnToOwnerClientRpc(
+        Vector3 position,
+        Quaternion rotation)
+    {
         if (!IsOwner)
             return;
 
-        // Only react to the Deadline.
+        PerformLocalRespawn(
+            position,
+            rotation,
+            true
+        );
+    }
+
+    private void OnControllerColliderHit(
+        ControllerColliderHit hit)
+    {
+        if (!IsOwner)
+            return;
+
         if (!hit.collider.CompareTag("Deadline"))
             return;
 
-        // Prevent multiple requests while touching the Deadline.
         if (respawnRequested)
             return;
 
@@ -63,7 +129,38 @@ public class RespawnManager : NetworkBehaviour
     [ServerRpc]
     private void RequestRespawnServerRpc()
     {
-        // Server decides whether this player should respawn.
+        if (SpawnPointsManager.Instance == null)
+        {
+            Debug.LogError(
+                "RespawnManager: SpawnPointsManager not found!"
+            );
+
+            return;
+        }
+
+        Transform spawnPoint =
+            SpawnPointsManager.Instance.GetSpawnPoint(
+                OwnerClientId
+            );
+
+        if (spawnPoint == null)
+        {
+            Debug.LogError(
+                $"RespawnManager: No spawn point for " +
+                $"Client {OwnerClientId}."
+            );
+
+            return;
+        }
+
+        respawnPosition = spawnPoint.position;
+        respawnRotation = spawnPoint.rotation;
+
+        Debug.Log(
+            $"Respawning Client {OwnerClientId} at " +
+            $"{spawnPoint.name}"
+        );
+
         SendRespawnToOwnerClientRpc(
             respawnPosition,
             respawnRotation
@@ -75,32 +172,42 @@ public class RespawnManager : NetworkBehaviour
         Vector3 position,
         Quaternion rotation)
     {
-        // Only the owner should perform the actual teleport.
         if (!IsOwner)
             return;
 
-        PerformLocalRespawn(position, rotation);
+        PerformLocalRespawn(
+            position,
+            rotation,
+            false
+        );
     }
 
     private void PerformLocalRespawn(
         Vector3 position,
-        Quaternion rotation)
+        Quaternion rotation,
+        bool initialSpawn)
     {
-        // Disable CharacterController before teleporting.
+        // Prevent CharacterController from fighting
+        // against the teleport.
         characterController.enabled = false;
 
-        // Move the player's own authoritative Transform.
-        transform.position = position;
-        transform.rotation = rotation;
+        // Reset player position and direction.
+        transform.SetPositionAndRotation(
+            position,
+            rotation
+        );
 
         // Reset model.
         if (playerModel != null)
         {
-            playerModel.localPosition = modelLocalPosition;
-            playerModel.localRotation = modelLocalRotation;
+            playerModel.localPosition =
+                modelLocalPosition;
+
+            playerModel.localRotation =
+                modelLocalRotation;
         }
 
-        // Reset movement velocity.
+        // Reset movement.
         PlayerMovement playerMovement =
             GetComponent<PlayerMovement>();
 
@@ -109,23 +216,57 @@ public class RespawnManager : NetworkBehaviour
             playerMovement.ResetVelocity();
         }
 
-        // Re-enable CharacterController.
+        // Reset player look.
+        PlayerLookManager playerLookManager =
+            GetComponent<PlayerLookManager>();
+
+        if (playerLookManager != null)
+        {
+            playerLookManager.ResetLook(rotation);
+        }
+
+        // Reset third-person camera.
+        if (CameraManager.Instance != null)
+        {
+            CameraManager.Instance.ResetThirdPersonCamera(
+                transform,
+                rotation
+            );
+        }
+
         characterController.enabled = true;
 
         respawnRequested = false;
+
+        Debug.Log(
+            initialSpawn
+                ? $"Initial spawn at {position}"
+                : $"Respawned at {position}"
+        );
     }
 
     public void Respawn()
     {
-        // For other scripts that may manually request a respawn.
         if (!IsOwner)
             return;
 
         if (IsServer)
         {
+            Transform spawnPoint =
+                SpawnPointsManager.Instance.GetSpawnPoint(
+                    OwnerClientId
+                );
+
+            if (spawnPoint == null)
+                return;
+
+            respawnPosition = spawnPoint.position;
+            respawnRotation = spawnPoint.rotation;
+
             PerformLocalRespawn(
                 respawnPosition,
-                respawnRotation
+                respawnRotation,
+                false
             );
         }
         else

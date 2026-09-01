@@ -20,9 +20,18 @@ public class CameraManager : MonoBehaviour
     [Header("Camera Target")]
     [SerializeField] private float targetSearchDelay = 0.2f;
 
+    [Header("Third Person Camera Reset")]
+    [SerializeField] private float thirdPersonVerticalAngle = 0f;
+
+    // Camera should be behind the player after respawn.
+    [SerializeField] private float thirdPersonCameraAngleOffset = 0f;
+
     public bool IsFirstPerson { get; private set; }
 
     private bool camerasBound = false;
+
+    private Transform localPlayer;
+    private Transform firstPersonTarget;
 
     private void Awake()
     {
@@ -75,13 +84,13 @@ public class CameraManager : MonoBehaviour
         if (!NetworkManager.Singleton.IsClient)
             return;
 
-        NetworkObject localPlayer =
+        NetworkObject localPlayerObject =
             NetworkManager.Singleton.LocalClient?.PlayerObject;
 
-        if (localPlayer == null)
+        if (localPlayerObject == null)
             return;
 
-        BindCamerasToPlayer(localPlayer.transform);
+        BindCamerasToPlayer(localPlayerObject.transform);
 
         camerasBound = true;
 
@@ -97,8 +106,10 @@ public class CameraManager : MonoBehaviour
         if (player == null)
             return;
 
+        localPlayer = player;
+
         // Find the first-person target inside the local player.
-        Transform firstPersonTarget =
+        firstPersonTarget =
             player.Find("FirstPerson Target");
 
         if (firstPersonTarget == null)
@@ -187,6 +198,76 @@ public class CameraManager : MonoBehaviour
         {
             firstPersonCamera.Priority = activePriority;
         }
+    }
+
+    // =========================================================
+    // RESET CAMERA AFTER RESPAWN
+    // =========================================================
+
+    public void ResetThirdPersonCamera(
+        Transform player,
+        Quaternion respawnRotation)
+    {
+        if (player == null)
+            return;
+
+        if (thirdPersonCamera == null)
+            return;
+
+        // -----------------------------------------------------
+        // Make sure the camera is following THIS local player.
+        // -----------------------------------------------------
+
+        Transform target =
+            player.Find("FirstPerson Target");
+
+        if (target == null)
+        {
+            target = player;
+        }
+
+        thirdPersonCamera.Follow = target;
+        thirdPersonCamera.LookAt = target;
+
+        // -----------------------------------------------------
+        // Reset Cinemachine Orbital Follow.
+        // -----------------------------------------------------
+
+        CinemachineOrbitalFollow orbitalFollow =
+            thirdPersonCamera.GetComponent<CinemachineOrbitalFollow>();
+
+        if (orbitalFollow != null)
+        {
+            // Player's respawn direction.
+            float playerYaw =
+                respawnRotation.eulerAngles.y;
+
+            // Put the camera behind the player.
+            float cameraYaw =
+                playerYaw + thirdPersonCameraAngleOffset;
+
+            // Normalize angle to 0-360.
+            cameraYaw =
+                Mathf.Repeat(cameraYaw, 360f);
+
+            orbitalFollow.HorizontalAxis.Value =
+                cameraYaw;
+
+            orbitalFollow.VerticalAxis.Value =
+                thirdPersonVerticalAngle;
+        }
+
+        // -----------------------------------------------------
+        // Tell Cinemachine not to use the previous camera state.
+        // This makes the reset happen immediately.
+        // -----------------------------------------------------
+
+        thirdPersonCamera.PreviousStateIsValid = false;
+
+        Debug.Log(
+            $"CameraManager: Third-person camera reset. " +
+            $"Player yaw = {respawnRotation.eulerAngles.y}"
+        );
     }
 
     // =========================================================

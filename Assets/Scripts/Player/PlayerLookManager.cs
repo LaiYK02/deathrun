@@ -167,4 +167,31 @@ public class PlayerLookManager : NetworkBehaviour
             );
         }
     }
+
+    // =========================================================
+    // RESET LOOK AFTER RESPAWN
+    // =========================================================
+
+    public void ResetLook(Quaternion respawnRotation)
+    {
+        // Reset player horizontal rotation.
+        transform.rotation = respawnRotation;
+
+        // Reset vertical look.
+        pitch = 0f;
+
+        // Reset first-person target.
+        if (firstPersonTarget != null)
+        {
+            firstPersonTarget.localRotation =
+                Quaternion.identity;
+        }
+
+        // Reset camera reference.
+        if (cameraTransform == null &&
+            Camera.main != null)
+        {
+            cameraTransform = Camera.main.transform;
+        }
+    }
 }
