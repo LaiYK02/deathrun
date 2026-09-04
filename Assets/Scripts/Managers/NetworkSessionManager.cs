@@ -54,6 +54,8 @@ public class NetworkSessionManager : MonoBehaviour
                 "NetworkSessionManager: UnityTransport component not found."
             );
         }
+
+        networkManager.NetworkConfig.NetworkTransport = transport;
     }
 
     private void OnDestroy()

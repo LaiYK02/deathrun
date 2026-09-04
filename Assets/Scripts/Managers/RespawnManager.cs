@@ -1,11 +1,16 @@
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(CharacterController))]
 public class RespawnManager : NetworkBehaviour
 {
     [Header("Player Model")]
     [SerializeField] private Transform playerModel;
+
+    [Header("Gameplay Scene")]
+    [SerializeField] private string gameSceneName = "GameScene";
 
     private Vector3 modelLocalPosition;
     private Quaternion modelLocalRotation;
@@ -16,6 +21,12 @@ public class RespawnManager : NetworkBehaviour
     private Quaternion respawnRotation;
 
     private bool respawnRequested;
+    private bool gameplayInitialized;
+    private Coroutine initializeCoroutine;
+
+    // =========================================================
+    // AWAKE
+    // =========================================================
 
     private void Awake()
     {
@@ -28,22 +39,114 @@ public class RespawnManager : NetworkBehaviour
         }
     }
 
+    // =========================================================
+    // NETWORK SPAWN
+    // =========================================================
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
+        // Listen for scene changes.
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
+        // If the player was spawned directly in GameScene,
+        // initialize immediately.
+        if (SceneManager.GetActiveScene().name == gameSceneName)
+        {
+            StartGameplayInitialization();
+        }
+    }
+
+    // =========================================================
+    // NETWORK DESPAWN
+    // =========================================================
+
+    public override void OnNetworkDespawn()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        if (initializeCoroutine != null)
+        {
+            StopCoroutine(initializeCoroutine);
+            initializeCoroutine = null;
+        }
+
+        base.OnNetworkDespawn();
+    }
+
+    // =========================================================
+    // SCENE LOADED
+    // =========================================================
+
+    private void OnSceneLoaded(
+        Scene scene,
+        LoadSceneMode mode)
+    {
+        // Ignore Lobby and other scenes.
+        if (scene.name != gameSceneName)
+            return;
+
+        StartGameplayInitialization();
+    }
+
+    // =========================================================
+    // START GAMEPLAY INITIALIZATION
+    // =========================================================
+
+    private void StartGameplayInitialization()
+    {
+        if (!IsSpawned)
+            return;
+
+        if (gameplayInitialized)
+            return;
+
+        if (initializeCoroutine != null)
+            return;
+
+        initializeCoroutine =
+            StartCoroutine(
+                InitializeGameplayAfterSceneLoad()
+            );
+    }
+
+    // =========================================================
+    // INITIALIZE GAMEPLAY
+    // =========================================================
+
+    private IEnumerator InitializeGameplayAfterSceneLoad()
+    {
+        // Wait one frame so GameScene objects have time
+        // to initialize their Awake() methods.
+        yield return null;
+
+        // Wait until SpawnPointsManager exists.
+        while (SpawnPointsManager.Instance == null)
+        {
+            yield return null;
+        }
+
+        initializeCoroutine = null;
+
+        if (gameplayInitialized)
+            yield break;
+
+        gameplayInitialized = true;
+
+        // Only the server assigns the network player's
+        // respawn position.
         if (IsServer)
         {
             AssignRespawnPoint();
-        }
 
-        // Wait until the server has assigned the spawn point,
-        // then send the correct position to the owner.
-        if (IsServer)
-        {
             SendInitialSpawnToOwner();
         }
     }
+
+    // =========================================================
+    // ASSIGN RESPAWN POINT
+    // =========================================================
 
     private void AssignRespawnPoint()
     {
@@ -52,9 +155,6 @@ public class RespawnManager : NetworkBehaviour
             Debug.LogError(
                 "RespawnManager: SpawnPointsManager not found!"
             );
-
-            respawnPosition = transform.position;
-            respawnRotation = transform.rotation;
 
             return;
         }
@@ -71,9 +171,6 @@ public class RespawnManager : NetworkBehaviour
                 $"for Client {OwnerClientId}."
             );
 
-            respawnPosition = transform.position;
-            respawnRotation = transform.rotation;
-
             return;
         }
 
@@ -85,6 +182,10 @@ public class RespawnManager : NetworkBehaviour
             $"{spawnPoint.name} at {spawnPoint.position}"
         );
     }
+
+    // =========================================================
+    // SEND INITIAL SPAWN
+    // =========================================================
 
     private void SendInitialSpawnToOwner()
     {
@@ -109,9 +210,17 @@ public class RespawnManager : NetworkBehaviour
         );
     }
 
+    // =========================================================
+    // DEADLINE COLLISION
+    // =========================================================
+
     private void OnControllerColliderHit(
         ControllerColliderHit hit)
     {
+        // Do not process respawning in Lobby.
+        if (SceneManager.GetActiveScene().name != gameSceneName)
+            return;
+
         if (!IsOwner)
             return;
 
@@ -126,15 +235,26 @@ public class RespawnManager : NetworkBehaviour
         RequestRespawnServerRpc();
     }
 
+    // =========================================================
+    // REQUEST RESPAWN
+    // =========================================================
+
     [ServerRpc]
     private void RequestRespawnServerRpc()
     {
+        if (!gameplayInitialized)
+        {
+            respawnRequested = false;
+            return;
+        }
+
         if (SpawnPointsManager.Instance == null)
         {
             Debug.LogError(
                 "RespawnManager: SpawnPointsManager not found!"
             );
 
+            respawnRequested = false;
             return;
         }
 
@@ -150,6 +270,7 @@ public class RespawnManager : NetworkBehaviour
                 $"Client {OwnerClientId}."
             );
 
+            respawnRequested = false;
             return;
         }
 
@@ -167,6 +288,10 @@ public class RespawnManager : NetworkBehaviour
         );
     }
 
+    // =========================================================
+    // SEND RESPAWN
+    // =========================================================
+
     [ClientRpc]
     private void SendRespawnToOwnerClientRpc(
         Vector3 position,
@@ -182,11 +307,18 @@ public class RespawnManager : NetworkBehaviour
         );
     }
 
+    // =========================================================
+    // PERFORM LOCAL RESPAWN
+    // =========================================================
+
     private void PerformLocalRespawn(
         Vector3 position,
         Quaternion rotation,
         bool initialSpawn)
     {
+        if (characterController == null)
+            return;
+
         // Prevent CharacterController from fighting
         // against the teleport.
         characterController.enabled = false;
@@ -245,9 +377,23 @@ public class RespawnManager : NetworkBehaviour
         );
     }
 
+    // =========================================================
+    // PUBLIC RESPAWN
+    // =========================================================
+
     public void Respawn()
     {
+        // Respawn only in GameScene.
+        if (SceneManager.GetActiveScene().name != gameSceneName)
+            return;
+
         if (!IsOwner)
+            return;
+
+        if (!gameplayInitialized)
+            return;
+
+        if (SpawnPointsManager.Instance == null)
             return;
 
         if (IsServer)

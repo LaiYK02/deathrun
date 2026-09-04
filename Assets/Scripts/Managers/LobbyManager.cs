@@ -66,6 +66,18 @@ public class LobbyManager : MonoBehaviour
             return;
         }
 
+        if (NetworkManager.Singleton == null)
+        {
+            Debug.LogError(
+                "LobbyManager: NetworkManager.Singleton was not found."
+            );
+
+            statusText.text =
+                "Status: Network manager not found";
+
+            return;
+        }
+
         // -----------------------------------------------------
         // BUTTON LISTENERS
         // -----------------------------------------------------

@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using UnityEngine.SceneManagement;
 
 public class PlayerLookManager : NetworkBehaviour
 {
@@ -21,30 +22,43 @@ public class PlayerLookManager : NetworkBehaviour
     [SerializeField] private Transform cameraTransform;
     [SerializeField] private float playerRotationSpeed = 10f;
 
+    [Header("Gameplay Scene")]
+    [SerializeField] private string gameSceneName = "GameScene";
+
     private bool lastFirstPersonState;
 
     private float pitch;
+
+    // =========================================================
+    // START
+    // =========================================================
 
     private void Start()
     {
         if (firstPersonTarget != null)
         {
-            pitch = firstPersonTarget.localEulerAngles.x;
+            pitch =
+                firstPersonTarget.localEulerAngles.x;
 
             if (pitch > 180f)
+            {
                 pitch -= 360f;
+            }
         }
 
-        // Only the local player controls their own camera/model.
+        // Only the local player controls
+        // their own camera/model.
         if (!IsOwner)
         {
             SetPlayerModelVisible(true);
             return;
         }
 
-        if (cameraTransform == null && Camera.main != null)
+        if (cameraTransform == null &&
+            Camera.main != null)
         {
-            cameraTransform = Camera.main.transform;
+            cameraTransform =
+                Camera.main.transform;
         }
 
         if (CameraManager.Instance != null)
@@ -56,7 +70,112 @@ public class PlayerLookManager : NetworkBehaviour
                 !lastFirstPersonState
             );
         }
+
+        // Set correct cursor state.
+        UpdateCursor();
     }
+
+    // =========================================================
+    // NETWORK SPAWN
+    // =========================================================
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        SceneManager.sceneLoaded +=
+            OnSceneLoaded;
+
+        // Set cursor immediately if this is
+        // the local player.
+        if (IsOwner)
+        {
+            UpdateCursor();
+        }
+    }
+
+    // =========================================================
+    // NETWORK DESPAWN
+    // =========================================================
+
+    public override void OnNetworkDespawn()
+    {
+        SceneManager.sceneLoaded -=
+            OnSceneLoaded;
+
+        // Make sure cursor is restored
+        // when the player disappears.
+        if (IsOwner)
+        {
+            ShowCursor();
+        }
+
+        base.OnNetworkDespawn();
+    }
+
+    // =========================================================
+    // SCENE LOADED
+    // =========================================================
+
+    private void OnSceneLoaded(
+        Scene scene,
+        LoadSceneMode mode)
+    {
+        if (!IsOwner)
+            return;
+
+        // Refresh camera reference because
+        // the old Lobby camera was destroyed.
+        if (Camera.main != null)
+        {
+            cameraTransform =
+                Camera.main.transform;
+
+            Debug.Log(
+                $"PlayerLookManager: Camera reference updated to " +
+                $"{Camera.main.name}."
+            );
+        }
+
+        // Update cursor for the new scene.
+        UpdateCursor();
+    }
+
+    // =========================================================
+    // CURSOR
+    // =========================================================
+
+    private void UpdateCursor()
+    {
+        if (!IsOwner)
+            return;
+
+        if (SceneManager.GetActiveScene().name ==
+            gameSceneName)
+        {
+            LockCursor();
+        }
+        else
+        {
+            ShowCursor();
+        }
+    }
+
+    private void LockCursor()
+    {
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
+    }
+
+    private void ShowCursor()
+    {
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
+    }
+
+    // =========================================================
+    // UPDATE
+    // =========================================================
 
     private void Update()
     {
@@ -82,9 +201,11 @@ public class PlayerLookManager : NetworkBehaviour
         bool currentFirstPersonState =
             CameraManager.Instance.IsFirstPerson;
 
-        if (currentFirstPersonState != lastFirstPersonState)
+        if (currentFirstPersonState !=
+            lastFirstPersonState)
         {
-            lastFirstPersonState = currentFirstPersonState;
+            lastFirstPersonState =
+                currentFirstPersonState;
 
             SetPlayerModelVisible(
                 !currentFirstPersonState
@@ -107,31 +228,54 @@ public class PlayerLookManager : NetworkBehaviour
 
     private void HandleFirstPersonLook()
     {
-        Vector2 lookInput = InputManager.Instance.LookInput;
+        Vector2 lookInput =
+            InputManager.Instance.LookInput;
 
-        float mouseX = lookInput.x * horizontalSensitivity;
-        float mouseY = lookInput.y * verticalSensitivity;
+        float mouseX =
+            lookInput.x *
+            horizontalSensitivity;
 
-        // Horizontal camera/player rotation
-        transform.Rotate(Vector3.up * mouseX);
+        float mouseY =
+            lookInput.y *
+            verticalSensitivity;
 
-        // Vertical camera rotation
+        // Horizontal player rotation.
+        transform.Rotate(
+            Vector3.up * mouseX
+        );
+
+        // Vertical camera rotation.
         pitch -= mouseY;
-        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+
+        pitch = Mathf.Clamp(
+            pitch,
+            minPitch,
+            maxPitch
+        );
 
         if (firstPersonTarget != null)
         {
             firstPersonTarget.localRotation =
-                Quaternion.Euler(pitch, 0f, 0f);
+                Quaternion.Euler(
+                    pitch,
+                    0f,
+                    0f
+                );
         }
     }
 
-    private void SetPlayerModelVisible(bool visible)
+    // =========================================================
+    // PLAYER MODEL VISIBILITY
+    // =========================================================
+
+    private void SetPlayerModelVisible(
+        bool visible)
     {
         if (playerModel == null)
             return;
 
-        Renderer[] renderers = playerModel.GetComponentsInChildren<Renderer>();
+        Renderer[] renderers =
+            playerModel.GetComponentsInChildren<Renderer>();
 
         foreach (Renderer renderer in renderers)
         {
@@ -148,23 +292,30 @@ public class PlayerLookManager : NetworkBehaviour
         if (cameraTransform == null)
             return;
 
-        Vector3 cameraForward = cameraTransform.forward;
+        Vector3 cameraForward =
+            cameraTransform.forward;
 
         // Ignore camera's vertical pitch.
         cameraForward.y = 0f;
 
-        if (cameraForward.sqrMagnitude > 0.001f)
+        if (cameraForward.sqrMagnitude >
+            0.001f)
         {
             cameraForward.Normalize();
 
             Quaternion targetRotation =
-                Quaternion.LookRotation(cameraForward, Vector3.up);
+                Quaternion.LookRotation(
+                    cameraForward,
+                    Vector3.up
+                );
 
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                playerRotationSpeed * Time.deltaTime
-            );
+            transform.rotation =
+                Quaternion.Slerp(
+                    transform.rotation,
+                    targetRotation,
+                    playerRotationSpeed *
+                    Time.deltaTime
+                );
         }
     }
 
@@ -172,10 +323,12 @@ public class PlayerLookManager : NetworkBehaviour
     // RESET LOOK AFTER RESPAWN
     // =========================================================
 
-    public void ResetLook(Quaternion respawnRotation)
+    public void ResetLook(
+        Quaternion respawnRotation)
     {
         // Reset player horizontal rotation.
-        transform.rotation = respawnRotation;
+        transform.rotation =
+            respawnRotation;
 
         // Reset vertical look.
         pitch = 0f;
@@ -191,7 +344,8 @@ public class PlayerLookManager : NetworkBehaviour
         if (cameraTransform == null &&
             Camera.main != null)
         {
-            cameraTransform = Camera.main.transform;
+            cameraTransform =
+                Camera.main.transform;
         }
     }
 }

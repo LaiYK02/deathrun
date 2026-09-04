@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using Unity.Netcode;
+using UnityEngine.SceneManagement;
 
 public class MultiplayerUI : MonoBehaviour
 {
@@ -12,6 +13,13 @@ public class MultiplayerUI : MonoBehaviour
     [Header("Network")]
     [SerializeField] private NetworkSessionManager networkSessionManager;
 
+    [Header("Gameplay Scene")]
+    [SerializeField] private string gameSceneName = "GameScene";
+
+    // =========================================================
+    // START
+    // =========================================================
+
     private void Start()
     {
         // Default IP for testing on the same computer.
@@ -22,47 +30,81 @@ public class MultiplayerUI : MonoBehaviour
 
         SetStatus("Disconnected");
 
-        // Menu is visible when starting.
-        ShowMenuCursor();
+        UpdateCursorForCurrentScene();
     }
+
+    // =========================================================
+    // ENABLE
+    // =========================================================
 
     private void OnEnable()
     {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
         if (NetworkManager.Singleton != null)
         {
-            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+            NetworkManager.Singleton.OnClientConnectedCallback +=
+                OnClientConnected;
+
+            NetworkManager.Singleton.OnClientDisconnectCallback +=
+                OnClientDisconnected;
         }
     }
+
+    // =========================================================
+    // DISABLE
+    // =========================================================
 
     private void OnDisable()
     {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
         if (NetworkManager.Singleton != null)
         {
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+            NetworkManager.Singleton.OnClientConnectedCallback -=
+                OnClientConnected;
+
+            NetworkManager.Singleton.OnClientDisconnectCallback -=
+                OnClientDisconnected;
         }
     }
 
+    // =========================================================
+    // UPDATE
+    // =========================================================
+
     private void Update()
     {
-        if (NetworkManager.Singleton == null)
-            return;
+        // Cursor should only be locked during gameplay.
+        UpdateCursorForCurrentScene();
+    }
 
-        if (!NetworkManager.Singleton.IsConnectedClient)
-            return;
+    // =========================================================
+    // SCENE LOADED
+    // =========================================================
 
-        if (multiplayerPanel != null &&
-            multiplayerPanel.activeSelf)
-            return;
-
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
+    private void OnSceneLoaded(
+        Scene scene,
+        LoadSceneMode mode)
+    {
+        UpdateCursorForCurrentScene();
     }
 
     // =========================================================
     // CURSOR
     // =========================================================
+
+    private void UpdateCursorForCurrentScene()
+    {
+        if (SceneManager.GetActiveScene().name == gameSceneName)
+        {
+            HideGameplayCursor();
+        }
+        else
+        {
+            ShowMenuCursor();
+        }
+    }
 
     private void ShowMenuCursor()
     {
@@ -92,11 +134,10 @@ public class MultiplayerUI : MonoBehaviour
 
         networkSessionManager.StartHost();
 
-        if (NetworkManager.Singleton != null &&
-            NetworkManager.Singleton.IsHost)
-        {
-            EnterGameplay();
-        }
+        // DO NOT call EnterGameplay() here.
+        //
+        // We are still in the Lobby.
+        // The cursor must remain visible.
     }
 
     // =========================================================
@@ -117,7 +158,8 @@ public class MultiplayerUI : MonoBehaviour
             return;
         }
 
-        string ipAddress = ipInputField.text.Trim();
+        string ipAddress =
+            ipInputField.text.Trim();
 
         if (string.IsNullOrEmpty(ipAddress))
         {
@@ -127,7 +169,10 @@ public class MultiplayerUI : MonoBehaviour
 
         SetStatus("Connecting...");
 
-        networkSessionManager.SetHostAddress(ipAddress);
+        networkSessionManager.SetHostAddress(
+            ipAddress
+        );
+
         networkSessionManager.StartClient();
     }
 
@@ -141,12 +186,21 @@ public class MultiplayerUI : MonoBehaviour
             return;
 
         // Only react to this computer's own connection.
-        if (clientId != NetworkManager.Singleton.LocalClientId)
+        if (clientId !=
+            NetworkManager.Singleton.LocalClientId)
+        {
             return;
+        }
 
         SetStatus("Connected");
 
-        EnterGameplay();
+        // DO NOT lock cursor here.
+        //
+        // We are still in Lobby.
+        // The cursor will be locked automatically
+        // when GameScene loads.
+
+        UpdateCursorForCurrentScene();
 
         Debug.Log(
             $"Connected successfully. Client ID: {clientId}"
@@ -163,8 +217,11 @@ public class MultiplayerUI : MonoBehaviour
             return;
 
         // Only react to this computer's own disconnection.
-        if (clientId != NetworkManager.Singleton.LocalClientId)
+        if (clientId !=
+            NetworkManager.Singleton.LocalClientId)
+        {
             return;
+        }
 
         SetStatus("Disconnected");
 
@@ -173,29 +230,11 @@ public class MultiplayerUI : MonoBehaviour
             multiplayerPanel.SetActive(true);
         }
 
-        ShowMenuCursor();
+        UpdateCursorForCurrentScene();
 
         Debug.Log(
             $"Disconnected. Client ID: {clientId}"
         );
-    }
-
-    // =========================================================
-    // ENTER GAMEPLAY
-    // =========================================================
-
-    private void EnterGameplay()
-    {
-        if (multiplayerPanel != null)
-        {
-            multiplayerPanel.SetActive(false);
-        }
-
-        HideGameplayCursor();
-
-        // Make sure the game window receives mouse focus.
-        Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
     }
 
     // =========================================================
@@ -206,7 +245,8 @@ public class MultiplayerUI : MonoBehaviour
     {
         if (statusText != null)
         {
-            statusText.text = "Status: " + message;
+            statusText.text =
+                "Status: " + message;
         }
     }
 }
