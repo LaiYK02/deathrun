@@ -1,11 +1,15 @@
 using UnityEngine;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using System.Net.Sockets;
+using System.Net;
 
 [RequireComponent(typeof(NetworkManager))]
 [RequireComponent(typeof(UnityTransport))]
 public class NetworkSessionManager : MonoBehaviour
 {
+    public static NetworkSessionManager Instance { get; private set; }
+
     [Header("Connection")]
     [SerializeField] private string hostAddress = "127.0.0.1";
     [SerializeField] private ushort port = 7777;
@@ -15,7 +19,25 @@ public class NetworkSessionManager : MonoBehaviour
 
     private void Awake()
     {
-        // Get the components directly from this GameObject.
+        // -----------------------------------------------------
+        // SINGLETON
+        // -----------------------------------------------------
+
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+
+        // Keep this object when changing scenes.
+        DontDestroyOnLoad(gameObject);
+
+        // -----------------------------------------------------
+        // COMPONENTS
+        // -----------------------------------------------------
+
         networkManager = GetComponent<NetworkManager>();
         transport = GetComponent<UnityTransport>();
 
@@ -34,15 +56,45 @@ public class NetworkSessionManager : MonoBehaviour
         }
     }
 
-    public void SetHostAddress(string address)
+    private void OnDestroy()
     {
-        hostAddress = address;
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
-    public void StartHost()
+    // =========================================================
+    // HOST ADDRESS
+    // =========================================================
+
+    public void SetHostAddress(string address)
+    {
+        hostAddress = address.Trim();
+    }
+
+    public string GetHostAddress()
+    {
+        return hostAddress;
+    }
+
+    // =========================================================
+    // START HOST
+    // =========================================================
+
+    public bool StartHost()
     {
         if (networkManager == null || transport == null)
-            return;
+            return false;
+
+        if (networkManager.IsListening)
+        {
+            Debug.LogWarning(
+                "NetworkSessionManager: Network is already running."
+            );
+
+            return false;
+        }
 
         // Listen on all local network interfaces.
         transport.SetConnectionData(
@@ -51,48 +103,123 @@ public class NetworkSessionManager : MonoBehaviour
             "0.0.0.0"
         );
 
-        if (!networkManager.StartHost())
+        bool success = networkManager.StartHost();
+
+        if (!success)
         {
-            Debug.LogError("Failed to start Host.");
-        }
-        else
-        {
-            Debug.Log(
-                $"Host started on port {port}."
+            Debug.LogError(
+                "NetworkSessionManager: Failed to start Host."
             );
+
+            return false;
         }
+
+        Debug.Log(
+            $"NetworkSessionManager: Host started on port {port}."
+        );
+
+        return true;
     }
 
-    public void StartClient()
+    // =========================================================
+    // START CLIENT
+    // =========================================================
+
+    public bool StartClient()
     {
         if (networkManager == null || transport == null)
-            return;
+            return false;
+
+        if (networkManager.IsListening)
+        {
+            Debug.LogWarning(
+                "NetworkSessionManager: Network is already running."
+            );
+
+            return false;
+        }
 
         transport.SetConnectionData(
             hostAddress,
             port
         );
 
-        if (!networkManager.StartClient())
+        bool success = networkManager.StartClient();
+
+        if (!success)
         {
             Debug.LogError(
-                $"Failed to connect to {hostAddress}:{port}"
+                $"NetworkSessionManager: Failed to start client for " +
+                $"{hostAddress}:{port}"
             );
+
+            return false;
         }
-        else
-        {
-            Debug.Log(
-                $"Connecting to {hostAddress}:{port}"
-            );
-        }
+
+        Debug.Log(
+            $"NetworkSessionManager: Connecting to " +
+            $"{hostAddress}:{port}"
+        );
+
+        return true;
     }
+
+    // =========================================================
+    // SHUTDOWN
+    // =========================================================
 
     public void Shutdown()
     {
-        if (networkManager != null &&
-            networkManager.IsListening)
+        if (networkManager == null)
+            return;
+
+        if (!networkManager.IsListening)
+            return;
+
+        Debug.Log(
+            "NetworkSessionManager: Shutting down network."
+        );
+
+        networkManager.Shutdown();
+    }
+
+    // =========================================================
+    // LOCAL IP
+    // =========================================================
+
+    public string GetLocalIPAddress()
+    {
+        string localIP = "127.0.0.1";
+
+        try
         {
-            networkManager.Shutdown();
+            IPHostEntry host =
+                Dns.GetHostEntry(Dns.GetHostName());
+
+            foreach (IPAddress ip in host.AddressList)
+            {
+                if (ip.AddressFamily != AddressFamily.InterNetwork)
+                    continue;
+
+                string address = ip.ToString();
+
+                // Prefer Radmin VPN address.
+                if (address.StartsWith("26."))
+                {
+                    return address;
+                }
+
+                localIP = address;
+            }
         }
+        catch (System.Exception e)
+        {
+            Debug.LogError(
+                "Could not find local IP address: " +
+                e.Message
+            );
+        }
+
+        return localIP;
     }
 }

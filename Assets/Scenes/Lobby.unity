@@ -1258,7 +1258,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &566850924
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2306,7 +2306,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1201689962
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2493,6 +2493,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1417568716}
+  - component: {fileID: 1417568717}
   m_Layer: 0
   m_Name: LobbyManager
   m_TagString: Untagged
@@ -2515,6 +2516,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1417568717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1417568715}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c11f371c78783e249829f1d9f5d0d1b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LobbyManager
+  connectionPanel: {fileID: 6990879}
+  playerListPanel: {fileID: 92279976}
+  hostButton: {fileID: 1445491840}
+  joinButton: {fileID: 351180111}
+  connectionBackButton: {fileID: 924575935}
+  ipInputField: {fileID: 209973832}
+  roomBackButton: {fileID: 1201689963}
+  startGameButton: {fileID: 566850925}
+  copyIPButton: {fileID: 582011086}
+  statusText: {fileID: 1132373638}
+  playerListText: {fileID: 248972900}
+  networkSessionManager: {fileID: 0}
+  mainMenuScene: MainMenu
+  gameScene: GameScene
 --- !u!1 &1445491838
 GameObject:
   m_ObjectHideFlags: 0
