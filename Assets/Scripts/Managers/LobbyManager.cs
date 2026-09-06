@@ -22,10 +22,13 @@ public class LobbyManager : MonoBehaviour
     [SerializeField] private Button roomBackButton;
     [SerializeField] private Button startGameButton;
     [SerializeField] private Button copyIPButton;
+    [SerializeField] private TMP_Text copyIPButtonText;
 
-    [Header("Room UI Text")]
-    [SerializeField] private TMP_Text statusText;
+    [Header("Player List")]
     [SerializeField] private TMP_Text playerListText;
+
+    [Header("Floating Notification")]
+    [SerializeField] private FloatingNotificationManager notificationManager;
 
     [Header("Scenes")]
     [SerializeField] private string mainMenuScene = "MainMenu";
@@ -48,7 +51,7 @@ public class LobbyManager : MonoBehaviour
     private void Start()
     {
         // -----------------------------------------------------
-        // GET PERSISTENT NETWORK SESSION MANAGER
+        // GET NETWORK SESSION MANAGER
         // -----------------------------------------------------
 
         networkSessionManager =
@@ -60,9 +63,6 @@ public class LobbyManager : MonoBehaviour
                 "LobbyManager: NetworkSessionManager was not found."
             );
 
-            statusText.text =
-                "Status: Network manager not found";
-
             return;
         }
 
@@ -72,18 +72,28 @@ public class LobbyManager : MonoBehaviour
                 "LobbyManager: NetworkManager.Singleton was not found."
             );
 
-            statusText.text =
-                "Status: Network manager not found";
-
             return;
+        }
+
+        if (notificationManager == null)
+        {
+            Debug.LogWarning(
+                "LobbyManager: Floating Notification Manager is not assigned."
+            );
         }
 
         // -----------------------------------------------------
         // BUTTON LISTENERS
         // -----------------------------------------------------
 
-        hostButton.onClick.AddListener(OnHostClicked);
-        joinButton.onClick.AddListener(OnJoinClicked);
+        hostButton.onClick.AddListener(
+            OnHostClicked
+        );
+
+        joinButton.onClick.AddListener(
+            OnJoinClicked
+        );
+
         connectionBackButton.onClick.AddListener(
             OnConnectionBackClicked
         );
@@ -104,14 +114,11 @@ public class LobbyManager : MonoBehaviour
         // NETWORK CALLBACKS
         // -----------------------------------------------------
 
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback +=
-                OnClientConnected;
+        NetworkManager.Singleton.OnClientConnectedCallback +=
+            OnClientConnected;
 
-            NetworkManager.Singleton.OnClientDisconnectCallback +=
-                OnClientDisconnected;
-        }
+        NetworkManager.Singleton.OnClientDisconnectCallback +=
+            OnClientDisconnected;
 
         // -----------------------------------------------------
         // INITIAL UI
@@ -126,37 +133,49 @@ public class LobbyManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (connectionTimeoutCoroutine != null)
-        {
-            StopCoroutine(connectionTimeoutCoroutine);
-            connectionTimeoutCoroutine = null;
-        }
+        CancelConnectionTimeout();
 
         if (hostButton != null)
-            hostButton.onClick.RemoveListener(OnHostClicked);
+        {
+            hostButton.onClick.RemoveListener(
+                OnHostClicked
+            );
+        }
 
         if (joinButton != null)
-            joinButton.onClick.RemoveListener(OnJoinClicked);
+        {
+            joinButton.onClick.RemoveListener(
+                OnJoinClicked
+            );
+        }
 
         if (connectionBackButton != null)
+        {
             connectionBackButton.onClick.RemoveListener(
                 OnConnectionBackClicked
             );
+        }
 
         if (roomBackButton != null)
+        {
             roomBackButton.onClick.RemoveListener(
                 OnRoomBackClicked
             );
+        }
 
         if (startGameButton != null)
+        {
             startGameButton.onClick.RemoveListener(
                 OnStartGameClicked
             );
+        }
 
         if (copyIPButton != null)
+        {
             copyIPButton.onClick.RemoveListener(
                 OnCopyIPClicked
             );
+        }
 
         if (NetworkManager.Singleton != null)
         {
@@ -176,15 +195,21 @@ public class LobbyManager : MonoBehaviour
     {
         if (networkSessionManager == null)
         {
-            Debug.LogError(
-                "LobbyManager: NetworkSessionManager not found."
+            notificationManager.ShowNotification(
+                "Network manager not found!"
             );
 
             return;
         }
 
         if (NetworkManager.Singleton == null)
+        {
+            notificationManager.ShowNotification(
+                "Network manager not found!"
+            );
+
             return;
+        }
 
         if (NetworkManager.Singleton.IsListening)
             return;
@@ -192,10 +217,9 @@ public class LobbyManager : MonoBehaviour
         isConnecting = true;
         isLeavingRoom = false;
 
-        SetConnectionButtonsInteractable(false);
-
-        statusText.text =
-            "Status: Starting host...";
+        SetConnectionButtonsInteractable(
+            false
+        );
 
         bool success =
             networkSessionManager.StartHost();
@@ -204,16 +228,21 @@ public class LobbyManager : MonoBehaviour
         {
             isConnecting = false;
 
-            SetConnectionButtonsInteractable(true);
+            SetConnectionButtonsInteractable(
+                true
+            );
 
-            statusText.text =
-                "Status: Failed to host";
+            notificationManager.ShowNotification(
+                "Failed to host!"
+            );
 
             return;
         }
 
-        // The local host client will trigger
-        // OnClientConnected().
+        // Successful host:
+        // Do not show notification.
+        //
+        // OnClientConnected() will enter the room.
     }
 
     // =========================================================
@@ -224,23 +253,30 @@ public class LobbyManager : MonoBehaviour
     {
         if (networkSessionManager == null)
         {
-            Debug.LogError(
-                "LobbyManager: NetworkSessionManager not found."
+            notificationManager.ShowNotification(
+                "Network manager not found!"
             );
 
             return;
         }
 
         if (NetworkManager.Singleton == null)
+        {
+            notificationManager.ShowNotification(
+                "Network manager not found!"
+            );
+
             return;
+        }
 
         string ip =
             ipInputField.text.Trim();
 
         if (string.IsNullOrEmpty(ip))
         {
-            statusText.text =
-                "Status: Enter an IP address";
+            notificationManager.ShowNotification(
+                "Enter an IP address!"
+            );
 
             return;
         }
@@ -248,15 +284,16 @@ public class LobbyManager : MonoBehaviour
         if (NetworkManager.Singleton.IsListening)
             return;
 
-        networkSessionManager.SetHostAddress(ip);
+        networkSessionManager.SetHostAddress(
+            ip
+        );
 
         isConnecting = true;
         isLeavingRoom = false;
 
-        SetConnectionButtonsInteractable(false);
-
-        statusText.text =
-            "Status: Connecting...";
+        SetConnectionButtonsInteractable(
+            false
+        );
 
         bool success =
             networkSessionManager.StartClient();
@@ -265,22 +302,24 @@ public class LobbyManager : MonoBehaviour
         {
             isConnecting = false;
 
-            SetConnectionButtonsInteractable(true);
+            SetConnectionButtonsInteractable(
+                true
+            );
 
-            statusText.text =
-                "Status: Failed to connect";
+            notificationManager.ShowNotification(
+                "Failed to connect!"
+            );
 
             return;
         }
 
-        // Start timeout.
-        if (connectionTimeoutCoroutine != null)
-        {
-            StopCoroutine(connectionTimeoutCoroutine);
-        }
+        // Start connection timeout.
+        CancelConnectionTimeout();
 
         connectionTimeoutCoroutine =
-            StartCoroutine(ConnectionTimeout());
+            StartCoroutine(
+                ConnectionTimeout()
+            );
     }
 
     // =========================================================
@@ -314,15 +353,17 @@ public class LobbyManager : MonoBehaviour
 
         ShowConnectionUI();
 
-        statusText.text =
-            "Status: Connection timed out";
+        notificationManager.ShowNotification(
+            "Connection timed out!"
+        );
     }
 
     // =========================================================
     // CLIENT CONNECTED
     // =========================================================
 
-    private void OnClientConnected(ulong clientId)
+    private void OnClientConnected(
+        ulong clientId)
     {
         Debug.Log(
             $"LobbyManager: Client connected. " +
@@ -332,15 +373,7 @@ public class LobbyManager : MonoBehaviour
         if (NetworkManager.Singleton == null)
             return;
 
-        // -----------------------------------------------------
-        // CANCEL CONNECTION TIMEOUT
-        // -----------------------------------------------------
-
-        if (connectionTimeoutCoroutine != null)
-        {
-            StopCoroutine(connectionTimeoutCoroutine);
-            connectionTimeoutCoroutine = null;
-        }
+        CancelConnectionTimeout();
 
         // -----------------------------------------------------
         // HOST
@@ -352,10 +385,7 @@ public class LobbyManager : MonoBehaviour
 
             EnterRoom(true);
 
-            Debug.Log(
-                "LobbyManager: Host entered room."
-            );
-
+            // No notification for successful hosting.
             return;
         }
 
@@ -370,9 +400,7 @@ public class LobbyManager : MonoBehaviour
 
             EnterRoom(false);
 
-            Debug.Log(
-                "LobbyManager: Successfully joined host."
-            );
+            // No notification for successful joining.
         }
     }
 
@@ -380,7 +408,8 @@ public class LobbyManager : MonoBehaviour
     // CLIENT DISCONNECTED
     // =========================================================
 
-    private void OnClientDisconnected(ulong clientId)
+    private void OnClientDisconnected(
+        ulong clientId)
     {
         Debug.Log(
             $"LobbyManager: Client disconnected. " +
@@ -401,8 +430,6 @@ public class LobbyManager : MonoBehaviour
 
         // -----------------------------------------------------
         // CLIENT
-        //
-        // Client failed to join or host disappeared.
         // -----------------------------------------------------
 
         if (!NetworkManager.Singleton.IsHost)
@@ -412,17 +439,15 @@ public class LobbyManager : MonoBehaviour
             {
                 isConnecting = false;
 
-                Debug.Log(
-                    "LobbyManager: Connection failed " +
-                    "or host disconnected."
-                );
-
                 ShowConnectionUI();
 
-                statusText.text =
-                    "Status: Connection failed";
+                SetConnectionButtonsInteractable(
+                    true
+                );
 
-                SetConnectionButtonsInteractable(true);
+                notificationManager.ShowNotification(
+                    "Failed to connect!"
+                );
             }
 
             return;
@@ -430,49 +455,56 @@ public class LobbyManager : MonoBehaviour
 
         // -----------------------------------------------------
         // HOST
-        //
-        // Another player disconnected.
         // -----------------------------------------------------
 
         RefreshPlayerList();
 
-        statusText.text =
-            "Status: Hosting";
-
-        Debug.Log(
-            $"LobbyManager: Player {clientId} " +
-            "left the room."
-        );
+        // No notification when another player simply leaves.
     }
 
     // =========================================================
     // ENTER ROOM
     // =========================================================
 
-    private void EnterRoom(bool isHost)
+    private void EnterRoom(
+        bool isHost)
     {
         connectionPanel.SetActive(false);
         playerListPanel.SetActive(true);
 
         roomBackButton.gameObject.SetActive(true);
 
-        // Only host sees START GAME.
-        startGameButton.gameObject.SetActive(isHost);
+        startGameButton.gameObject.SetActive(
+            isHost
+        );
 
-        if (isHost)
+        // -----------------------------------------------------
+        // SHOW IP
+        // -----------------------------------------------------
+
+        if (copyIPButtonText != null &&
+            networkSessionManager != null)
         {
-            statusText.text =
-                "Status: Hosting";
-        }
-        else
-        {
-            statusText.text =
-                "Status: Connected";
+            string ip;
+
+            if (isHost)
+            {
+                ip =
+                    networkSessionManager
+                    .GetLocalIPAddress();
+            }
+            else
+            {
+                ip =
+                    networkSessionManager
+                    .GetHostAddress();
+            }
+
+            copyIPButtonText.text = ip;
         }
 
         RefreshPlayerList();
 
-        // Give NetworkObjects a moment to spawn.
         Invoke(
             nameof(RefreshPlayerList),
             0.2f
@@ -490,8 +522,6 @@ public class LobbyManager : MonoBehaviour
         isLeavingRoom = true;
         isConnecting = false;
 
-        // If somehow still connecting,
-        // cancel the network session.
         if (networkSessionManager != null)
         {
             networkSessionManager.Shutdown();
@@ -519,17 +549,11 @@ public class LobbyManager : MonoBehaviour
             nameof(RefreshPlayerList)
         );
 
-        Debug.Log(
-            "LobbyManager: Leaving room."
-        );
-
         if (networkSessionManager != null)
         {
             networkSessionManager.Shutdown();
         }
 
-        // Return to the connection panel,
-        // but remain in Lobby.
         ShowConnectionUI();
 
         isLeavingRoom = false;
@@ -547,12 +571,11 @@ public class LobbyManager : MonoBehaviour
         roomBackButton.gameObject.SetActive(false);
         startGameButton.gameObject.SetActive(false);
 
-        statusText.text =
-            "Status: Disconnected";
-
         playerListText.text = "";
 
-        SetConnectionButtonsInteractable(true);
+        SetConnectionButtonsInteractable(
+            true
+        );
     }
 
     // =========================================================
@@ -564,16 +587,11 @@ public class LobbyManager : MonoBehaviour
         if (NetworkManager.Singleton == null)
             return;
 
-        // Only host can start.
         if (!NetworkManager.Singleton.IsHost)
             return;
 
         if (!NetworkManager.Singleton.IsListening)
             return;
-
-        Debug.Log(
-            "LobbyManager: Host starting game."
-        );
 
         NetworkManager.Singleton.SceneManager.LoadScene(
             gameScene,
@@ -590,13 +608,38 @@ public class LobbyManager : MonoBehaviour
         if (networkSessionManager == null)
             return;
 
-        string ip =
-            networkSessionManager.GetLocalIPAddress();
+        string ip;
+
+        if (NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsHost)
+        {
+            // Host copies its own Radmin IP.
+            ip =
+                networkSessionManager
+                .GetLocalIPAddress();
+        }
+        else
+        {
+            // Client copies host IP.
+            ip =
+                networkSessionManager
+                .GetHostAddress();
+        }
+
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            notificationManager.ShowNotification(
+                "IP address unavailable!"
+            );
+
+            return;
+        }
 
         GUIUtility.systemCopyBuffer = ip;
 
-        statusText.text =
-            "Status: IP copied";
+        notificationManager.ShowNotification(
+            "IP copied!"
+        );
 
         Debug.Log(
             $"LobbyManager: IP copied = {ip}"
@@ -637,15 +680,19 @@ public class LobbyManager : MonoBehaviour
 
         int number = 1;
 
-        foreach (LobbyPlayer lobbyPlayer in sortedPlayers)
+        foreach (
+            LobbyPlayer lobbyPlayer
+            in sortedPlayers)
         {
             if (lobbyPlayer == null)
                 continue;
 
             string playerName =
-                lobbyPlayer.PlayerName.Value.ToString();
+                lobbyPlayer.PlayerName.Value
+                .ToString();
 
-            if (string.IsNullOrWhiteSpace(playerName))
+            if (string.IsNullOrWhiteSpace(
+                playerName))
             {
                 playerName = "Player";
             }
@@ -665,8 +712,7 @@ public class LobbyManager : MonoBehaviour
     // =========================================================
 
     private void SetConnectionButtonsInteractable(
-        bool interactable
-    )
+        bool interactable)
     {
         if (hostButton != null)
             hostButton.interactable =
