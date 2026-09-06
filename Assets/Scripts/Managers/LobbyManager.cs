@@ -373,19 +373,29 @@ public class LobbyManager : MonoBehaviour
         if (NetworkManager.Singleton == null)
             return;
 
-        CancelConnectionTimeout();
-
         // -----------------------------------------------------
         // HOST
         // -----------------------------------------------------
 
         if (NetworkManager.Singleton.IsHost)
         {
-            isConnecting = false;
+            // Only enter the room when the host itself finishes connecting.
+            if (clientId ==
+                NetworkManager.Singleton.LocalClientId)
+            {
+                CancelConnectionTimeout();
 
-            EnterRoom(true);
+                isConnecting = false;
 
-            // No notification for successful hosting.
+                EnterRoom(true);
+            }
+
+            // If this is another player joining, just refresh the host's list.
+            else
+            {
+                RefreshPlayerList();
+            }
+
             return;
         }
 
@@ -396,11 +406,11 @@ public class LobbyManager : MonoBehaviour
         if (clientId ==
             NetworkManager.Singleton.LocalClientId)
         {
+            CancelConnectionTimeout();
+
             isConnecting = false;
 
             EnterRoom(false);
-
-            // No notification for successful joining.
         }
     }
 
@@ -649,6 +659,11 @@ public class LobbyManager : MonoBehaviour
     // =========================================================
     // PLAYER LIST
     // =========================================================
+
+    public void RefreshPlayerListFromHeartbeat()
+    {
+        RefreshPlayerList();
+    }
 
     private void RefreshPlayerList()
     {
