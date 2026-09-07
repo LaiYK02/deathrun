@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -54,14 +55,15 @@ public class SettingsMenuManager : MonoBehaviour
 
     private GameSettingsManager settingsManager;
 
+    public event Action OnSettingsClosed;
+
     // =========================================================
     // START
     // =========================================================
 
     private void Start()
     {
-        settingsManager =
-            GameSettingsManager.Instance;
+        settingsManager = GameSettingsManager.Instance;
 
         if (settingsManager == null)
         {
@@ -265,6 +267,8 @@ public class SettingsMenuManager : MonoBehaviour
     public void CloseSettings()
     {
         gameObject.SetActive(false);
+
+        OnSettingsClosed?.Invoke();
     }
 
     // =========================================================
@@ -372,63 +376,42 @@ public class SettingsMenuManager : MonoBehaviour
     // GAME SETTINGS CALLBACKS
     // =========================================================
 
-    private void OnHorizontalSensitivityChanged(
-        float value)
+    private void OnHorizontalSensitivityChanged(float value)
     {
-        settingsManager.SetHorizontalSensitivity(
-            value
-        );
+        settingsManager.SetHorizontalSensitivity(value);
     }
 
-    private void OnVerticalSensitivityChanged(
-        float value)
+    private void OnVerticalSensitivityChanged(float value)
     {
-        settingsManager.SetVerticalSensitivity(
-            value
-        );
+        settingsManager.SetVerticalSensitivity(value);
     }
 
-    private void OnCrosshairChanged(
-        bool enabled)
+    private void OnCrosshairChanged(bool enabled)
     {
-        settingsManager.SetCrosshairEnabled(
-            enabled
-        );
+        settingsManager.SetCrosshairEnabled(enabled);
     }
 
-    private void OnStartingCameraChanged(
-        int value)
+    private void OnStartingCameraChanged(int value)
     {
-        settingsManager.SetStartingCamera(
-            value
-        );
+        settingsManager.SetStartingCamera(value);
     }
 
     // =========================================================
     // SOUND SETTINGS CALLBACKS
     // =========================================================
 
-    private void OnMasterVolumeChanged(
-        float value)
+    private void OnMasterVolumeChanged(float value)
     {
-        settingsManager.SetMasterVolume(
-            value
-        );
+        settingsManager.SetMasterVolume(value);
     }
 
-    private void OnMusicVolumeChanged(
-        float value)
+    private void OnMusicVolumeChanged(float value)
     {
-        settingsManager.SetMusicVolume(
-            value
-        );
+        settingsManager.SetMusicVolume(value);
     }
 
-    private void OnSFXVolumeChanged(
-        float value)
+    private void OnSFXVolumeChanged(float value)
     {
-        settingsManager.SetSFXVolume(
-            value
-        );
+        settingsManager.SetSFXVolume(value);
     }
 }

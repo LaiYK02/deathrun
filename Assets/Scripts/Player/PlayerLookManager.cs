@@ -231,6 +231,16 @@ public class PlayerLookManager : NetworkBehaviour
         Vector2 lookInput =
             InputManager.Instance.LookInput;
 
+        float horizontalSensitivity =
+            GameSettingsManager.Instance != null
+                ? GameSettingsManager.Instance.HorizontalSensitivity
+                : 0.2f;
+
+        float verticalSensitivity =
+            GameSettingsManager.Instance != null
+                ? GameSettingsManager.Instance.VerticalSensitivity
+                : 0.08f;
+
         float mouseX =
             lookInput.x *
             horizontalSensitivity;

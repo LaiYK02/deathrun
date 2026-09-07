@@ -48,7 +48,7 @@ public class CameraManager : MonoBehaviour
 
     private void Start()
     {
-        SetThirdPersonView();
+        ApplyStartingCamera();
 
         // Network player may not exist yet.
         InvokeRepeating(
@@ -290,5 +290,25 @@ public class CameraManager : MonoBehaviour
                 CinemachineBlendDefinition.Styles.Cut,
                 0f
             );
+    }
+
+    private void ApplyStartingCamera()
+    {
+        int startingCamera = 0;
+
+        if (GameSettingsManager.Instance != null)
+        {
+            startingCamera =
+                GameSettingsManager.Instance.StartingCamera;
+        }
+
+        if (startingCamera == 0)
+        {
+            SetThirdPersonView();
+        }
+        else
+        {
+            SetFirstPersonView();
+        }
     }
 }
