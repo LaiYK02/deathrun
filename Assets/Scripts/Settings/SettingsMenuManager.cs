@@ -30,7 +30,7 @@ public class SettingsMenuManager : MonoBehaviour
     [SerializeField] private Slider verticalSensitivitySlider;
 
     [SerializeField] private Toggle crosshairToggle;
-
+    [SerializeField] private Toggle veryFunnyModeToggle;
     [SerializeField] private TMP_Dropdown startingCameraDropdown;
 
     // =========================================================
@@ -150,6 +150,13 @@ public class SettingsMenuManager : MonoBehaviour
             );
         }
 
+        if (veryFunnyModeToggle != null)
+        {
+            veryFunnyModeToggle.onValueChanged.AddListener(
+                OnVeryFunnyModeChanged
+            );
+        }
+
         // -----------------------------------------------------
         // DROPDOWN
         // -----------------------------------------------------
@@ -236,6 +243,13 @@ public class SettingsMenuManager : MonoBehaviour
         {
             crosshairToggle.onValueChanged.RemoveListener(
                 OnCrosshairChanged
+            );
+        }
+
+        if (veryFunnyModeToggle != null)
+        {
+            veryFunnyModeToggle.onValueChanged.RemoveListener(
+                OnVeryFunnyModeChanged
             );
         }
 
@@ -339,6 +353,13 @@ public class SettingsMenuManager : MonoBehaviour
             );
         }
 
+        if (veryFunnyModeToggle != null)
+        {
+            veryFunnyModeToggle.SetIsOnWithoutNotify(
+                settingsManager.VeryFunnyMode
+            );
+        }
+
         if (startingCameraDropdown != null)
         {
             startingCameraDropdown.SetValueWithoutNotify(
@@ -389,6 +410,11 @@ public class SettingsMenuManager : MonoBehaviour
     private void OnCrosshairChanged(bool enabled)
     {
         settingsManager.SetCrosshairEnabled(enabled);
+    }
+
+    private void OnVeryFunnyModeChanged(bool enabled)
+    {
+        settingsManager.SetVeryFunnyMode(enabled);
     }
 
     private void OnStartingCameraChanged(int value)

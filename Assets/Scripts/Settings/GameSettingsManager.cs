@@ -21,6 +21,9 @@ public class GameSettingsManager : MonoBehaviour
     private const string StartingCameraKey =
         "Settings_StartingCamera";
 
+    private const string VeryFunnyModeKey =
+        "Settings_VeryFunnyMode";
+
     private const string MasterVolumeKey =
         "Settings_MasterVolume";
 
@@ -43,6 +46,8 @@ public class GameSettingsManager : MonoBehaviour
     // 1 = First Person
     private const int DefaultStartingCamera = 0;
 
+    private const bool DefaultVeryFunnyMode = false;
+
     private const float DefaultMasterVolume = 1f;
     private const float DefaultMusicVolume = 1f;
     private const float DefaultSFXVolume = 1f;
@@ -64,6 +69,8 @@ public class GameSettingsManager : MonoBehaviour
     public bool CrosshairEnabled { get; private set; }
 
     public int StartingCamera { get; private set; }
+
+    public bool VeryFunnyMode { get; private set; }
 
     public float MasterVolume { get; private set; }
 
@@ -119,6 +126,12 @@ public class GameSettingsManager : MonoBehaviour
                 StartingCameraKey,
                 DefaultStartingCamera
             );
+
+        VeryFunnyMode =
+            PlayerPrefs.GetInt(
+                VeryFunnyModeKey,
+                DefaultVeryFunnyMode ? 1 : 0
+            ) == 1;
 
         MasterVolume =
             PlayerPrefs.GetFloat(
@@ -198,6 +211,22 @@ public class GameSettingsManager : MonoBehaviour
         PlayerPrefs.SetInt(
             StartingCameraKey,
             cameraIndex
+        );
+
+        SaveSettings();
+    }
+
+    // =========================================================
+    // VERY FUNNY MODE
+    // =========================================================
+
+    public void SetVeryFunnyMode(bool enabled)
+    {
+        VeryFunnyMode = enabled;
+
+        PlayerPrefs.SetInt(
+            VeryFunnyModeKey,
+            enabled ? 1 : 0
         );
 
         SaveSettings();
