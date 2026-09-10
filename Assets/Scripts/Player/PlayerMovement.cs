@@ -45,6 +45,15 @@ public class PlayerMovement : NetworkBehaviour
 
     private float jumpBufferTimer;
 
+    // Controls whether the LOCAL PLAYER can control
+    // horizontal movement and jumping.
+    //
+    // IMPORTANT:
+    // This does NOT disable the component.
+    // Gravity and CharacterController movement
+    // will continue working.
+    private bool movementControlEnabled = true;
+
     public MovementState CurrentState => currentState;
 
     public Vector3 Velocity => velocity;
@@ -156,23 +165,91 @@ public class PlayerMovement : NetworkBehaviour
                 return;
         }
 
-        UpdateJumpBuffer();
-        UpdateMovementState();
+        // -----------------------------------------------------
+        // PLAYER CONTROL
+        // -----------------------------------------------------
 
-        switch (currentState)
+        if (movementControlEnabled)
         {
-            case MovementState.Ground:
-                HandleGroundMovement();
-                break;
+            UpdateJumpBuffer();
+            UpdateMovementState();
 
-            case MovementState.Air:
-                HandleAirMovement();
-                break;
+            switch (currentState)
+            {
+                case MovementState.Ground:
+                    HandleGroundMovement();
+                    break;
+
+                case MovementState.Air:
+                    HandleAirMovement();
+                    break;
+            }
+
+            HandleJump();
+        }
+        else
+        {
+            // Ignore WASD and Space, but DO NOT modify the
+            // existing velocity.
+
+            UpdateMovementState();
+
+            // If the player is on the ground, allow normal
+            // friction to slow down any existing horizontal
+            // velocity.
+
+            if (currentState == MovementState.Ground)
+            {
+                ApplyGroundFriction();
+            }
+
+            // Prevent a buffered jump from triggering after
+            // returning from the pause menu.
+            jumpBufferTimer = 0f;
         }
 
-        HandleJump();
+        // -----------------------------------------------------
+        // GRAVITY MUST ALWAYS RUN
+        // -----------------------------------------------------
+
         HandleGravity();
+
+        // -----------------------------------------------------
+        // CHARACTER CONTROLLER MUST ALWAYS MOVE
+        // -----------------------------------------------------
+
         ApplyMovement();
+    }
+
+    // =========================================================
+    // MOVEMENT CONTROL
+    // =========================================================
+
+    public void SetMovementControlEnabled(bool enabled)
+    {
+        movementControlEnabled = enabled;
+
+        if (!enabled)
+        {
+            // Do NOT modify the current velocity.
+            //
+            // This allows the player to preserve their
+            // horizontal movement while airborne.
+            //
+            // Example:
+            // W + Space ¡ú jump forward
+            // ESC       ¡ú pause
+            // Player continues along the same arc.
+
+            // Prevent a jump that was pressed just before
+            // the pause menu opened from triggering later.
+            jumpBufferTimer = 0f;
+        }
+
+        Debug.Log(
+            $"PlayerMovement: Movement control " +
+            $"{(enabled ? "enabled" : "disabled")}."
+        );
     }
 
     // =========================================================

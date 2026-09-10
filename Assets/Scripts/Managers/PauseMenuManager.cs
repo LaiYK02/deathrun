@@ -2,9 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
+using Unity.Netcode;
 
 public class PauseMenuManager : MonoBehaviour
 {
+    public static PauseMenuManager Instance { get; private set; }
+
     [Header("Pause Menu")]
     [SerializeField] private GameObject pauseMenu;
 
@@ -21,16 +24,39 @@ public class PauseMenuManager : MonoBehaviour
     [SerializeField] private SettingsMenuManager settingsMenuManager;
 
     private bool isPaused = false;
+    private bool isSettingsOpen = false;
 
     private PlayerMovement localPlayerMovement;
     private PlayerLookManager localPlayerLook;
 
     public bool IsPaused => isPaused;
 
+    public bool IsSettingsOpen => isSettingsOpen;
+
+    // =========================================================
+    // START
+    // =========================================================
+
     private void Start()
     {
-        // Make sure the pause menu starts hidden.
+        // -----------------------------------------------------
+        // SINGLETON
+        // -----------------------------------------------------
+
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+
+        // -----------------------------------------------------
+        // INITIAL STATE
+        // -----------------------------------------------------
+
         isPaused = false;
+        isSettingsOpen = false;
 
         if (pauseMenu != null)
         {
@@ -42,14 +68,19 @@ public class PauseMenuManager : MonoBehaviour
             hud.SetActive(true);
         }
 
+        // -----------------------------------------------------
+        // SETTINGS EVENT
+        // -----------------------------------------------------
+
         if (settingsMenuManager != null)
         {
-            settingsMenuManager.OnSettingsClosed += OnSettingsClosed;
+            settingsMenuManager.OnSettingsClosed +=
+                OnSettingsClosed;
         }
 
-        // ---------------------------------------------------------
+        // -----------------------------------------------------
         // BUTTONS
-        // ---------------------------------------------------------
+        // -----------------------------------------------------
 
         if (resumeButton != null)
         {
@@ -63,15 +94,22 @@ public class PauseMenuManager : MonoBehaviour
 
         if (mainMenuButton != null)
         {
-            mainMenuButton.onClick.AddListener(BackToMainMenu);
+            mainMenuButton.onClick.AddListener(
+                BackToMainMenu
+            );
         }
 
         if (exitButton != null)
         {
-            exitButton.onClick.AddListener(ExitToDesktop);
+            exitButton.onClick.AddListener(
+                ExitToDesktop
+            );
         }
 
-        // Find the local player.
+        // -----------------------------------------------------
+        // FIND LOCAL PLAYER
+        // -----------------------------------------------------
+
         InvokeRepeating(
             nameof(TryFindLocalPlayer),
             0.1f,
@@ -79,42 +117,84 @@ public class PauseMenuManager : MonoBehaviour
         );
     }
 
+    // =========================================================
+    // DESTROY
+    // =========================================================
+
     private void OnDestroy()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
         if (settingsMenuManager != null)
         {
-            settingsMenuManager.OnSettingsClosed -= OnSettingsClosed;
+            settingsMenuManager.OnSettingsClosed -=
+                OnSettingsClosed;
         }
 
         if (resumeButton != null)
         {
-            resumeButton.onClick.RemoveListener(ResumeGame);
+            resumeButton.onClick.RemoveListener(
+                ResumeGame
+            );
         }
 
         if (settingsButton != null)
         {
-            settingsButton.onClick.RemoveListener(OpenSettings);
+            settingsButton.onClick.RemoveListener(
+                OpenSettings
+            );
         }
 
         if (mainMenuButton != null)
         {
-            mainMenuButton.onClick.RemoveListener(BackToMainMenu);
+            mainMenuButton.onClick.RemoveListener(
+                BackToMainMenu
+            );
         }
 
         if (exitButton != null)
         {
-            exitButton.onClick.RemoveListener(ExitToDesktop);
+            exitButton.onClick.RemoveListener(
+                ExitToDesktop
+            );
         }
 
         CancelInvoke(nameof(TryFindLocalPlayer));
 
+        // Make sure camera control is restored.
+        if (CameraManager.Instance != null)
+        {
+            CameraManager.Instance.SetCameraControlEnabled(
+                true
+            );
+        }
+
         UnlockCursor();
     }
+
+    // =========================================================
+    // UPDATE
+    // =========================================================
 
     private void Update()
     {
         if (Keyboard.current == null)
             return;
+
+        // -----------------------------------------------------
+        // IMPORTANT:
+        // ESC DOES NOTHING WHILE SETTINGS ARE OPEN.
+        // The Settings Back button is responsible for leaving
+        // the Settings screen.
+        // -----------------------------------------------------
+
+        if (isSettingsOpen)
+        {
+            return;
+        }
 
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
@@ -134,14 +214,14 @@ public class PauseMenuManager : MonoBehaviour
             return;
         }
 
-        if (Unity.Netcode.NetworkManager.Singleton == null)
+        if (NetworkManager.Singleton == null)
             return;
 
-        if (!Unity.Netcode.NetworkManager.Singleton.IsClient)
+        if (!NetworkManager.Singleton.IsClient)
             return;
 
-        Unity.Netcode.NetworkObject player =
-            Unity.Netcode.NetworkManager.Singleton
+        NetworkObject player =
+            NetworkManager.Singleton
                 .LocalClient?
                 .PlayerObject;
 
@@ -156,7 +236,10 @@ public class PauseMenuManager : MonoBehaviour
 
         if (localPlayerMovement != null)
         {
-            Debug.Log("PauseMenuManager: Local player found.");
+            Debug.Log(
+                "PauseMenuManager: Local player found."
+            );
+
             CancelInvoke(nameof(TryFindLocalPlayer));
         }
     }
@@ -178,7 +261,7 @@ public class PauseMenuManager : MonoBehaviour
     }
 
     // =========================================================
-    // OPEN
+    // OPEN PAUSE MENU
     // =========================================================
 
     public void OpenPauseMenu()
@@ -187,48 +270,101 @@ public class PauseMenuManager : MonoBehaviour
             return;
 
         isPaused = true;
+        isSettingsOpen = false;
 
-        // Show pause menu.
+        // -----------------------------------------------------
+        // SHOW PAUSE MENU
+        // -----------------------------------------------------
+
         if (pauseMenu != null)
         {
             pauseMenu.SetActive(true);
         }
 
-        // Hide gameplay HUD.
+        // -----------------------------------------------------
+        // HIDE HUD
+        // -----------------------------------------------------
+
         if (hud != null)
         {
             hud.SetActive(false);
         }
 
-        // Disable local player controls.
+        // -----------------------------------------------------
+        // DISABLE LOCAL PLAYER CONTROL
+        // -----------------------------------------------------
+
         SetPlayerInputEnabled(false);
 
-        // Unlock mouse for UI.
+        // -----------------------------------------------------
+        // FREEZE CAMERA CONTROL
+        // -----------------------------------------------------
+
+        SetCameraControlEnabled(false);
+
+        // -----------------------------------------------------
+        // SHOW MOUSE
+        // -----------------------------------------------------
+
         UnlockCursor();
 
-        Debug.Log("PauseMenuManager: Pause menu opened.");
+        Debug.Log(
+            "PauseMenuManager: Pause menu opened."
+        );
     }
+
+    // =========================================================
+    // SETTINGS CLOSED
+    // =========================================================
 
     private void OnSettingsClosed()
     {
         if (!isPaused)
             return;
 
+        // Settings has closed.
+        isSettingsOpen = false;
+
+        // -----------------------------------------------------
+        // SHOW PAUSE MENU AGAIN
+        // -----------------------------------------------------
+
         if (pauseMenu != null)
         {
             pauseMenu.SetActive(true);
         }
 
-        // Keep HUD hidden.
+        // -----------------------------------------------------
+        // KEEP HUD HIDDEN
+        // -----------------------------------------------------
+
         if (hud != null)
         {
             hud.SetActive(false);
         }
 
-        // Keep gameplay controls disabled.
+        // -----------------------------------------------------
+        // KEEP PLAYER CONTROL DISABLED
+        // -----------------------------------------------------
+
         SetPlayerInputEnabled(false);
 
+        // -----------------------------------------------------
+        // KEEP CAMERA FROZEN
+        // -----------------------------------------------------
+
+        SetCameraControlEnabled(false);
+
+        // -----------------------------------------------------
+        // KEEP MOUSE AVAILABLE FOR UI
+        // -----------------------------------------------------
+
         UnlockCursor();
+
+        Debug.Log(
+            "PauseMenuManager: Settings closed. " +
+            "Returning to pause menu."
+        );
     }
 
     // =========================================================
@@ -241,26 +377,47 @@ public class PauseMenuManager : MonoBehaviour
             return;
 
         isPaused = false;
+        isSettingsOpen = false;
 
-        // Hide pause menu.
+        // -----------------------------------------------------
+        // HIDE PAUSE MENU
+        // -----------------------------------------------------
+
         if (pauseMenu != null)
         {
             pauseMenu.SetActive(false);
         }
 
-        // Show gameplay HUD.
+        // -----------------------------------------------------
+        // SHOW HUD
+        // -----------------------------------------------------
+
         if (hud != null)
         {
             hud.SetActive(true);
         }
 
-        // Enable local player controls.
+        // -----------------------------------------------------
+        // ENABLE LOCAL PLAYER CONTROL
+        // -----------------------------------------------------
+
         SetPlayerInputEnabled(true);
 
-        // Lock mouse back to gameplay.
+        // -----------------------------------------------------
+        // ENABLE CAMERA CONTROL
+        // -----------------------------------------------------
+
+        SetCameraControlEnabled(true);
+
+        // -----------------------------------------------------
+        // LOCK MOUSE
+        // -----------------------------------------------------
+
         LockCursor();
 
-        Debug.Log("PauseMenuManager: Game resumed.");
+        Debug.Log(
+            "PauseMenuManager: Game resumed."
+        );
     }
 
     // =========================================================
@@ -271,7 +428,9 @@ public class PauseMenuManager : MonoBehaviour
     {
         if (localPlayerMovement != null)
         {
-            localPlayerMovement.enabled = enabled;
+            localPlayerMovement.SetMovementControlEnabled(
+                enabled
+            );
         }
 
         if (localPlayerLook != null)
@@ -281,27 +440,89 @@ public class PauseMenuManager : MonoBehaviour
     }
 
     // =========================================================
+    // CAMERA CONTROL
+    // =========================================================
+
+    private void SetCameraControlEnabled(bool enabled)
+    {
+        if (CameraManager.Instance == null)
+            return;
+
+        CameraManager.Instance.SetCameraControlEnabled(
+            enabled
+        );
+    }
+
+    // =========================================================
     // SETTINGS
     // =========================================================
 
     public void OpenSettings()
     {
+        if (!isPaused)
+            return;
+
         if (settingsMenuManager == null)
         {
             Debug.LogError(
-                "PauseMenuManager: SettingsMenuManager is not assigned."
+                "PauseMenuManager: " +
+                "SettingsMenuManager is not assigned."
             );
 
             return;
         }
 
-        // Hide pause menu while settings are open.
+        // -----------------------------------------------------
+        // MARK SETTINGS AS OPEN
+        // -----------------------------------------------------
+
+        isSettingsOpen = true;
+
+        // -----------------------------------------------------
+        // HIDE PAUSE MENU
+        // -----------------------------------------------------
+
         if (pauseMenu != null)
         {
             pauseMenu.SetActive(false);
         }
 
+        // -----------------------------------------------------
+        // KEEP HUD HIDDEN
+        // -----------------------------------------------------
+
+        if (hud != null)
+        {
+            hud.SetActive(false);
+        }
+
+        // -----------------------------------------------------
+        // KEEP PLAYER DISABLED
+        // -----------------------------------------------------
+
+        SetPlayerInputEnabled(false);
+
+        // -----------------------------------------------------
+        // KEEP CAMERA FROZEN
+        // -----------------------------------------------------
+
+        SetCameraControlEnabled(false);
+
+        // -----------------------------------------------------
+        // OPEN SETTINGS
+        // -----------------------------------------------------
+
         settingsMenuManager.OpenSettings();
+
+        // -----------------------------------------------------
+        // MOUSE REMAINS UNLOCKED
+        // -----------------------------------------------------
+
+        UnlockCursor();
+
+        Debug.Log(
+            "PauseMenuManager: Settings opened."
+        );
     }
 
     // =========================================================
@@ -311,13 +532,14 @@ public class PauseMenuManager : MonoBehaviour
     public void BackToMainMenu()
     {
         Debug.Log(
-            "PauseMenuManager: Returning to Main Menu."
+            "PauseMenuManager: " +
+            "Returning to Main Menu."
         );
 
-        // Make sure gameplay is not left locally disabled.
         isPaused = false;
+        isSettingsOpen = false;
 
-        // Shut down the multiplayer connection.
+        // Shut down multiplayer.
         if (NetworkSessionManager.Instance != null)
         {
             NetworkSessionManager.Instance.Shutdown();
@@ -328,7 +550,7 @@ public class PauseMenuManager : MonoBehaviour
     }
 
     // =========================================================
-    // EXIT
+    // EXIT TO DESKTOP
     // =========================================================
 
     public void ExitToDesktop()
@@ -337,7 +559,7 @@ public class PauseMenuManager : MonoBehaviour
             "PauseMenuManager: Exiting game."
         );
 
-        // Shut down multiplayer before quitting.
+        // Shut down multiplayer.
         if (NetworkSessionManager.Instance != null)
         {
             NetworkSessionManager.Instance.Shutdown();

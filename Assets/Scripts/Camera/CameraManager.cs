@@ -30,8 +30,14 @@ public class CameraManager : MonoBehaviour
 
     private bool camerasBound = false;
 
+    private bool cameraControlEnabled = true;
+
     private Transform localPlayer;
     private Transform firstPersonTarget;
+
+    // =========================================================
+    // AWAKE
+    // =========================================================
 
     private void Awake()
     {
@@ -46,6 +52,10 @@ public class CameraManager : MonoBehaviour
         SetupInstantCameraSwitch();
     }
 
+    // =========================================================
+    // START
+    // =========================================================
+
     private void Start()
     {
         ApplyStartingCamera();
@@ -58,8 +68,51 @@ public class CameraManager : MonoBehaviour
         );
     }
 
+    // =========================================================
+    // DESTROY
+    // =========================================================
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        // Make sure Cinemachine is enabled
+        // when this object is destroyed.
+        if (cinemachineBrain != null)
+        {
+            cinemachineBrain.enabled = true;
+        }
+
+        if (thirdPersonCamera != null)
+        {
+            CinemachineInputAxisController inputController =
+                thirdPersonCamera.GetComponent<
+                    CinemachineInputAxisController
+                >();
+
+            if (inputController != null)
+            {
+                inputController.enabled = true;
+            }
+        }
+    }
+
+    // =========================================================
+    // UPDATE
+    // =========================================================
+
     private void Update()
     {
+        // -----------------------------------------------------
+        // DO NOT PROCESS CAMERA INPUT WHEN DISABLED.
+        // -----------------------------------------------------
+
+        if (!cameraControlEnabled)
+            return;
+
         if (InputManager.Instance == null)
             return;
 
@@ -67,6 +120,42 @@ public class CameraManager : MonoBehaviour
         {
             ToggleCameraView();
         }
+    }
+
+    // =========================================================
+    // CAMERA CONTROL ENABLE / DISABLE
+    // =========================================================
+
+    public void SetCameraControlEnabled(bool enabled)
+    {
+        cameraControlEnabled = enabled;
+
+        // -----------------------------------------------------
+        // IMPORTANT:
+        //
+        // Do NOT disable the Cinemachine Brain.
+        //
+        // The Brain must remain enabled so the camera can
+        // continue following the player while paused.
+        // -----------------------------------------------------
+
+        if (thirdPersonCamera != null)
+        {
+            CinemachineInputAxisController inputController =
+                thirdPersonCamera.GetComponent<
+                    CinemachineInputAxisController
+                >();
+
+            if (inputController != null)
+            {
+                inputController.enabled = enabled;
+            }
+        }
+
+        Debug.Log(
+            $"CameraManager: Camera input " +
+            $"{(enabled ? "enabled" : "disabled")}."
+        );
     }
 
     // =========================================================
@@ -85,12 +174,16 @@ public class CameraManager : MonoBehaviour
             return;
 
         NetworkObject localPlayerObject =
-            NetworkManager.Singleton.LocalClient?.PlayerObject;
+            NetworkManager.Singleton
+                .LocalClient?
+                .PlayerObject;
 
         if (localPlayerObject == null)
             return;
 
-        BindCamerasToPlayer(localPlayerObject.transform);
+        BindCamerasToPlayer(
+            localPlayerObject.transform
+        );
 
         camerasBound = true;
 
@@ -108,14 +201,16 @@ public class CameraManager : MonoBehaviour
 
         localPlayer = player;
 
-        // Find the first-person target inside the local player.
+        // Find the first-person target inside
+        // the local player.
         firstPersonTarget =
             player.Find("FirstPerson Target");
 
         if (firstPersonTarget == null)
         {
             Debug.LogWarning(
-                "CameraManager: FirstPerson Target was not found."
+                "CameraManager: " +
+                "FirstPerson Target was not found."
             );
         }
 
@@ -160,6 +255,11 @@ public class CameraManager : MonoBehaviour
 
     public void ToggleCameraView()
     {
+        // IMPORTANT:
+        // Never allow camera switching while paused/settings.
+        if (!cameraControlEnabled)
+            return;
+
         if (IsFirstPerson)
         {
             SetThirdPersonView();
@@ -176,12 +276,14 @@ public class CameraManager : MonoBehaviour
 
         if (thirdPersonCamera != null)
         {
-            thirdPersonCamera.Priority = activePriority;
+            thirdPersonCamera.Priority =
+                activePriority;
         }
 
         if (firstPersonCamera != null)
         {
-            firstPersonCamera.Priority = inactivePriority;
+            firstPersonCamera.Priority =
+                inactivePriority;
         }
     }
 
@@ -191,12 +293,14 @@ public class CameraManager : MonoBehaviour
 
         if (thirdPersonCamera != null)
         {
-            thirdPersonCamera.Priority = inactivePriority;
+            thirdPersonCamera.Priority =
+                inactivePriority;
         }
 
         if (firstPersonCamera != null)
         {
-            firstPersonCamera.Priority = activePriority;
+            firstPersonCamera.Priority =
+                activePriority;
         }
     }
 
@@ -234,7 +338,9 @@ public class CameraManager : MonoBehaviour
         // -----------------------------------------------------
 
         CinemachineOrbitalFollow orbitalFollow =
-            thirdPersonCamera.GetComponent<CinemachineOrbitalFollow>();
+            thirdPersonCamera.GetComponent<
+                CinemachineOrbitalFollow
+            >();
 
         if (orbitalFollow != null)
         {
@@ -244,7 +350,8 @@ public class CameraManager : MonoBehaviour
 
             // Put the camera behind the player.
             float cameraYaw =
-                playerYaw + thirdPersonCameraAngleOffset;
+                playerYaw +
+                thirdPersonCameraAngleOffset;
 
             // Normalize angle to 0-360.
             cameraYaw =
@@ -258,15 +365,25 @@ public class CameraManager : MonoBehaviour
         }
 
         // -----------------------------------------------------
-        // Tell Cinemachine not to use the previous camera state.
-        // This makes the reset happen immediately.
+        // Tell Cinemachine not to use previous state.
         // -----------------------------------------------------
 
-        thirdPersonCamera.PreviousStateIsValid = false;
+        if (cinemachineBrain != null)
+        {
+            // Only invalidate camera state if the brain
+            // is currently enabled.
+            if (cinemachineBrain.enabled)
+            {
+                thirdPersonCamera.PreviousStateIsValid =
+                    false;
+            }
+        }
 
         Debug.Log(
-            $"CameraManager: Third-person camera reset. " +
-            $"Player yaw = {respawnRotation.eulerAngles.y}"
+            $"CameraManager: " +
+            $"Third-person camera reset. " +
+            $"Player yaw = " +
+            $"{respawnRotation.eulerAngles.y}"
         );
     }
 
@@ -279,7 +396,8 @@ public class CameraManager : MonoBehaviour
         if (cinemachineBrain == null)
         {
             Debug.LogError(
-                "CameraManager: Cinemachine Brain is not assigned."
+                "CameraManager: " +
+                "Cinemachine Brain is not assigned."
             );
 
             return;
@@ -291,6 +409,10 @@ public class CameraManager : MonoBehaviour
                 0f
             );
     }
+
+    // =========================================================
+    // STARTING CAMERA
+    // =========================================================
 
     private void ApplyStartingCamera()
     {
