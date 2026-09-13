@@ -184,22 +184,20 @@ public class PauseMenuManager : MonoBehaviour
         if (Keyboard.current == null)
             return;
 
-        // -----------------------------------------------------
-        // IMPORTANT:
-        // ESC DOES NOTHING WHILE SETTINGS ARE OPEN.
-        // The Settings Back button is responsible for leaving
-        // the Settings screen.
-        // -----------------------------------------------------
+        if (!Keyboard.current.escapeKey.wasPressedThisFrame)
+            return;
 
         if (isSettingsOpen)
         {
+            CloseSettingsAndResume();
             return;
         }
 
-        if (Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            TogglePauseMenu();
-        }
+        // -----------------------------------------------------
+        // PAUSE MENU
+        // -----------------------------------------------------
+
+        TogglePauseMenu();
     }
 
     // =========================================================
@@ -258,6 +256,24 @@ public class PauseMenuManager : MonoBehaviour
         {
             OpenPauseMenu();
         }
+    }
+
+    private void CloseSettingsAndResume()
+    {
+        if (!isSettingsOpen)
+            return;
+
+        Debug.Log(
+            "PauseMenuManager: ESC pressed in Settings. " +
+            "Closing Settings and resuming game."
+        );
+
+        if (settingsMenuManager != null)
+        {
+            settingsMenuManager.CloseSettings();
+        }
+
+        ResumeGame();
     }
 
     // =========================================================
