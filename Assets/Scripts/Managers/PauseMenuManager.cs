@@ -442,11 +442,51 @@ public class PauseMenuManager : MonoBehaviour
 
     private void SetPlayerInputEnabled(bool enabled)
     {
+        RespawnManager respawnManager = null;
+
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkObject player =
+                NetworkManager.Singleton
+                    .LocalClient?
+                    .PlayerObject;
+
+            if (player != null)
+            {
+                respawnManager =
+                    player.GetComponent<RespawnManager>();
+            }
+        }
+
+        // -----------------------------------------------------
+        // DEAD PLAYER
+        // -----------------------------------------------------
+
+        if (respawnManager != null &&
+            respawnManager.IsDead.Value)
+        {
+            if (localPlayerMovement != null)
+            {
+                localPlayerMovement
+                    .SetMovementControlEnabled(false);
+            }
+
+            if (localPlayerLook != null)
+            {
+                localPlayerLook.enabled = false;
+            }
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // NORMAL PLAYER
+        // -----------------------------------------------------
+
         if (localPlayerMovement != null)
         {
-            localPlayerMovement.SetMovementControlEnabled(
-                enabled
-            );
+            localPlayerMovement
+                .SetMovementControlEnabled(enabled);
         }
 
         if (localPlayerLook != null)

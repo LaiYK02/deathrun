@@ -9,19 +9,46 @@ public class RespawnManager : NetworkBehaviour
     [Header("Player Model")]
     [SerializeField] private Transform playerModel;
 
+    [Header("Death Audio")]
+    [SerializeField] private AudioSource deathAudioSource;
+    [SerializeField] private AudioClip normalDeathSound;
+    [SerializeField] private AudioClip funnyDeathSound;
+
     [Header("Gameplay Scene")]
     [SerializeField] private string gameSceneName = "GameScene";
+
+    // ---------------------------------------------------------
+    // NETWORK DEATH STATE
+    // ---------------------------------------------------------
+
+    public NetworkVariable<bool> IsDead =
+        new NetworkVariable<bool>(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    // ---------------------------------------------------------
+    // LOCAL STATE
+    // ---------------------------------------------------------
+
+    public bool DeathTriggeredLocally
+    {
+        get;
+        private set;
+    }
+
+    private CharacterController characterController;
 
     private Vector3 modelLocalPosition;
     private Quaternion modelLocalRotation;
 
-    private CharacterController characterController;
+    private Vector3 spawnPosition;
+    private Quaternion spawnRotation;
 
-    private Vector3 respawnPosition;
-    private Quaternion respawnRotation;
-
-    private bool respawnRequested;
     private bool gameplayInitialized;
+    private bool deathRequested;
+
     private Coroutine initializeCoroutine;
 
     // =========================================================
@@ -30,12 +57,23 @@ public class RespawnManager : NetworkBehaviour
 
     private void Awake()
     {
-        characterController = GetComponent<CharacterController>();
+        characterController =
+            GetComponent<CharacterController>();
 
         if (playerModel != null)
         {
-            modelLocalPosition = playerModel.localPosition;
-            modelLocalRotation = playerModel.localRotation;
+            modelLocalPosition =
+                playerModel.localPosition;
+
+            modelLocalRotation =
+                playerModel.localRotation;
+        }
+
+        if (deathAudioSource != null)
+        {
+            deathAudioSource.playOnAwake = false;
+            deathAudioSource.loop = false;
+            deathAudioSource.spatialBlend = 1f;
         }
     }
 
@@ -47,12 +85,14 @@ public class RespawnManager : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
-        // Listen for scene changes.
-        SceneManager.sceneLoaded += OnSceneLoaded;
+        IsDead.OnValueChanged +=
+            OnDeathStateChanged;
 
-        // If the player was spawned directly in GameScene,
-        // initialize immediately.
-        if (SceneManager.GetActiveScene().name == gameSceneName)
+        SceneManager.sceneLoaded +=
+            OnSceneLoaded;
+
+        if (SceneManager.GetActiveScene().name ==
+            gameSceneName)
         {
             StartGameplayInitialization();
         }
@@ -64,7 +104,11 @@ public class RespawnManager : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
+        IsDead.OnValueChanged -=
+            OnDeathStateChanged;
+
+        SceneManager.sceneLoaded -=
+            OnSceneLoaded;
 
         if (initializeCoroutine != null)
         {
@@ -83,7 +127,6 @@ public class RespawnManager : NetworkBehaviour
         Scene scene,
         LoadSceneMode mode)
     {
-        // Ignore Lobby and other scenes.
         if (scene.name != gameSceneName)
             return;
 
@@ -91,7 +134,7 @@ public class RespawnManager : NetworkBehaviour
     }
 
     // =========================================================
-    // START GAMEPLAY INITIALIZATION
+    // GAMEPLAY INITIALIZATION
     // =========================================================
 
     private void StartGameplayInitialization()
@@ -111,17 +154,10 @@ public class RespawnManager : NetworkBehaviour
             );
     }
 
-    // =========================================================
-    // INITIALIZE GAMEPLAY
-    // =========================================================
-
     private IEnumerator InitializeGameplayAfterSceneLoad()
     {
-        // Wait one frame so GameScene objects have time
-        // to initialize their Awake() methods.
         yield return null;
 
-        // Wait until SpawnPointsManager exists.
         while (SpawnPointsManager.Instance == null)
         {
             yield return null;
@@ -134,26 +170,25 @@ public class RespawnManager : NetworkBehaviour
 
         gameplayInitialized = true;
 
-        // Only the server assigns the network player's
-        // respawn position.
         if (IsServer)
         {
-            AssignRespawnPoint();
+            AssignSpawnPoint();
 
             SendInitialSpawnToOwner();
         }
     }
 
     // =========================================================
-    // ASSIGN RESPAWN POINT
+    // ASSIGN SPAWN POINT
     // =========================================================
 
-    private void AssignRespawnPoint()
+    private void AssignSpawnPoint()
     {
         if (SpawnPointsManager.Instance == null)
         {
             Debug.LogError(
-                "RespawnManager: SpawnPointsManager not found!"
+                "RespawnManager: " +
+                "SpawnPointsManager not found!"
             );
 
             return;
@@ -167,31 +202,35 @@ public class RespawnManager : NetworkBehaviour
         if (spawnPoint == null)
         {
             Debug.LogError(
-                $"RespawnManager: Could not find spawn point " +
-                $"for Client {OwnerClientId}."
+                $"RespawnManager: " +
+                $"Could not find spawn point for " +
+                $"Client {OwnerClientId}."
             );
 
             return;
         }
 
-        respawnPosition = spawnPoint.position;
-        respawnRotation = spawnPoint.rotation;
+        spawnPosition =
+            spawnPoint.position;
+
+        spawnRotation =
+            spawnPoint.rotation;
 
         Debug.Log(
             $"Player {OwnerClientId} assigned to " +
-            $"{spawnPoint.name} at {spawnPoint.position}"
+            $"{spawnPoint.name}."
         );
     }
 
     // =========================================================
-    // SEND INITIAL SPAWN
+    // INITIAL SPAWN
     // =========================================================
 
     private void SendInitialSpawnToOwner()
     {
         SendInitialSpawnToOwnerClientRpc(
-            respawnPosition,
-            respawnRotation
+            spawnPosition,
+            spawnRotation
         );
     }
 
@@ -203,10 +242,9 @@ public class RespawnManager : NetworkBehaviour
         if (!IsOwner)
             return;
 
-        PerformLocalRespawn(
+        PerformLocalSpawn(
             position,
-            rotation,
-            true
+            rotation
         );
     }
 
@@ -217,9 +255,11 @@ public class RespawnManager : NetworkBehaviour
     private void OnControllerColliderHit(
         ControllerColliderHit hit)
     {
-        // Do not process respawning in Lobby.
-        if (SceneManager.GetActiveScene().name != gameSceneName)
+        if (SceneManager.GetActiveScene().name !=
+            gameSceneName)
+        {
             return;
+        }
 
         if (!IsOwner)
             return;
@@ -227,109 +267,252 @@ public class RespawnManager : NetworkBehaviour
         if (!hit.collider.CompareTag("Deadline"))
             return;
 
-        if (respawnRequested)
+        if (IsDead.Value ||
+            deathRequested ||
+            DeathTriggeredLocally)
+        {
             return;
+        }
 
-        respawnRequested = true;
+        deathRequested = true;
 
-        RequestRespawnServerRpc();
+        // Immediately stop local player control.
+        EnterLocalDeathState();
+
+        RequestDeathServerRpc();
     }
 
     // =========================================================
-    // REQUEST RESPAWN
+    // LOCAL DEATH
+    // =========================================================
+
+    private void EnterLocalDeathState()
+    {
+        if (DeathTriggeredLocally)
+            return;
+
+        DeathTriggeredLocally = true;
+
+        // -----------------------------------------------------
+        // STOP PLAYER MOVEMENT
+        // -----------------------------------------------------
+
+        PlayerMovement playerMovement =
+            GetComponent<PlayerMovement>();
+
+        if (playerMovement != null)
+        {
+            playerMovement.ResetVelocity();
+
+            playerMovement.SetMovementControlEnabled(
+                false
+            );
+        }
+
+        // -----------------------------------------------------
+        // STOP PLAYER LOOK
+        // -----------------------------------------------------
+
+        PlayerLookManager playerLook =
+            GetComponent<PlayerLookManager>();
+
+        if (playerLook != null)
+        {
+            playerLook.ShowPlayerModelForDeath();
+
+            playerLook.enabled = false;
+        }
+
+        // -----------------------------------------------------
+        // FORCE SPECTATOR CAMERA
+        // -----------------------------------------------------
+
+        if (CameraManager.Instance != null)
+        {
+            CameraManager.Instance.EnterSpectatorMode(
+                transform
+            );
+        }
+
+        // -----------------------------------------------------
+        // PLAY DEATH ANIMATION
+        // -----------------------------------------------------
+
+        PlayerAnimationManager animationManager =
+            GetComponent<PlayerAnimationManager>();
+
+        if (animationManager != null)
+        {
+            animationManager.SetDeathAnimation();
+        }
+    }
+
+    // =========================================================
+    // REQUEST DEATH
     // =========================================================
 
     [ServerRpc]
-    private void RequestRespawnServerRpc()
+    private void RequestDeathServerRpc()
     {
         if (!gameplayInitialized)
         {
-            respawnRequested = false;
+            deathRequested = false;
             return;
         }
 
-        if (SpawnPointsManager.Instance == null)
+        if (IsDead.Value)
+            return;
+
+        IsDead.Value = true;
+
+        // Notify the round manager.
+        if (RoundManager.Instance != null)
         {
-            Debug.LogError(
-                "RespawnManager: SpawnPointsManager not found!"
-            );
-
-            respawnRequested = false;
-            return;
-        }
-
-        Transform spawnPoint =
-            SpawnPointsManager.Instance.GetSpawnPoint(
+            RoundManager.Instance.RegisterPlayerDeath(
                 OwnerClientId
             );
+        }
 
-        if (spawnPoint == null)
+        PlayDeathSoundClientRpc();
+    }
+
+    // =========================================================
+    // DEATH STATE CHANGED
+    // =========================================================
+
+    private void OnDeathStateChanged(
+        bool previousState,
+        bool newState)
+    {
+        if (!newState)
+            return;
+
+        // Owner already enters death state immediately
+        // when touching the Deadline.
+        if (IsOwner)
         {
-            Debug.LogError(
-                $"RespawnManager: No spawn point for " +
-                $"Client {OwnerClientId}."
+            EnterLocalDeathState();
+        }
+
+        // Remote players need the death animation.
+        if (!IsOwner)
+        {
+            PlayerAnimationManager animationManager =
+                GetComponent<PlayerAnimationManager>();
+
+            if (animationManager != null)
+            {
+                animationManager.SetDeathAnimation();
+            }
+        }
+    }
+
+    // =========================================================
+    // DEATH SOUND
+    // =========================================================
+
+    [ClientRpc]
+    private void PlayDeathSoundClientRpc()
+    {
+        if (deathAudioSource == null)
+            return;
+
+        AudioClip selectedDeathSound = null;
+
+        // Use the player's saved Very Funny Mode setting.
+        if (GameSettingsManager.Instance != null &&
+            GameSettingsManager.Instance.VeryFunnyMode)
+        {
+            selectedDeathSound =
+                funnyDeathSound;
+        }
+        else
+        {
+            selectedDeathSound =
+                normalDeathSound;
+        }
+
+        if (selectedDeathSound == null)
+        {
+            Debug.LogWarning(
+                "RespawnManager: " +
+                "Selected death sound is not assigned."
             );
 
-            respawnRequested = false;
             return;
         }
 
-        respawnPosition = spawnPoint.position;
-        respawnRotation = spawnPoint.rotation;
-
-        Debug.Log(
-            $"Respawning Client {OwnerClientId} at " +
-            $"{spawnPoint.name}"
-        );
-
-        SendRespawnToOwnerClientRpc(
-            respawnPosition,
-            respawnRotation
+        deathAudioSource.PlayOneShot(
+            selectedDeathSound
         );
     }
 
     // =========================================================
-    // SEND RESPAWN
+    // NEW ROUND RESET
     // =========================================================
 
+    public void ResetForNewRound(
+        Vector3 position,
+        Quaternion rotation)
+    {
+        if (!IsServer)
+            return;
+
+        IsDead.Value = false;
+
+        ResetForNewRoundClientRpc(
+            position,
+            rotation
+        );
+    }
+
     [ClientRpc]
-    private void SendRespawnToOwnerClientRpc(
+    private void ResetForNewRoundClientRpc(
         Vector3 position,
         Quaternion rotation)
     {
         if (!IsOwner)
             return;
 
-        PerformLocalRespawn(
+        PerformLocalSpawn(
             position,
-            rotation,
-            false
+            rotation
         );
     }
 
     // =========================================================
-    // PERFORM LOCAL RESPAWN
+    // PERFORM LOCAL SPAWN
     // =========================================================
 
-    private void PerformLocalRespawn(
+    private void PerformLocalSpawn(
         Vector3 position,
-        Quaternion rotation,
-        bool initialSpawn)
+        Quaternion rotation)
     {
         if (characterController == null)
             return;
 
-        // Prevent CharacterController from fighting
-        // against the teleport.
+        // -----------------------------------------------------
+        // RESET LOCAL DEATH STATE
+        // -----------------------------------------------------
+
+        DeathTriggeredLocally = false;
+        deathRequested = false;
+
+        // -----------------------------------------------------
+        // DISABLE CHARACTER CONTROLLER DURING TELEPORT
+        // -----------------------------------------------------
+
         characterController.enabled = false;
 
-        // Reset player position and direction.
         transform.SetPositionAndRotation(
             position,
             rotation
         );
 
-        // Reset model.
+        // -----------------------------------------------------
+        // RESET PLAYER MODEL
+        // -----------------------------------------------------
+
         if (playerModel != null)
         {
             playerModel.localPosition =
@@ -339,85 +522,88 @@ public class RespawnManager : NetworkBehaviour
                 modelLocalRotation;
         }
 
-        // Reset movement.
+        // -----------------------------------------------------
+        // RESET MOVEMENT
+        // -----------------------------------------------------
+
         PlayerMovement playerMovement =
             GetComponent<PlayerMovement>();
 
         if (playerMovement != null)
         {
             playerMovement.ResetVelocity();
+
+            playerMovement.SetMovementControlEnabled(
+                true
+            );
         }
 
-        // Reset player look.
-        PlayerLookManager playerLookManager =
+        // -----------------------------------------------------
+        // RESET LOOK
+        // -----------------------------------------------------
+
+        PlayerLookManager playerLook =
             GetComponent<PlayerLookManager>();
 
-        if (playerLookManager != null)
+        if (playerLook != null)
         {
-            playerLookManager.ResetLook(rotation);
+            playerLook.ResetLook(rotation);
+
+            playerLook.enabled = true;
         }
 
-        // Reset third-person camera.
+        // -----------------------------------------------------
+        // RESET ANIMATION
+        // -----------------------------------------------------
+
+        PlayerAnimationManager animationManager =
+            GetComponent<PlayerAnimationManager>();
+
+        if (animationManager != null)
+        {
+            animationManager.SetAliveAnimation();
+        }
+
+        // -----------------------------------------------------
+        // RESET CAMERA
+        // -----------------------------------------------------
+
         if (CameraManager.Instance != null)
         {
-            CameraManager.Instance.ResetThirdPersonCamera(
+            CameraManager.Instance.ResetForNewRound(
                 transform,
                 rotation
             );
         }
 
+        // -----------------------------------------------------
+        // RESET MODEL VISIBILITY
+        // -----------------------------------------------------
+
+        if (playerLook != null)
+        {
+            playerLook.RefreshPlayerModelVisibility();
+        }
+
         characterController.enabled = true;
 
-        respawnRequested = false;
-
         Debug.Log(
-            initialSpawn
-                ? $"Initial spawn at {position}"
-                : $"Respawned at {position}"
+            $"Player {OwnerClientId} " +
+            $"reset for new round at {position}."
         );
     }
 
     // =========================================================
-    // PUBLIC RESPAWN
+    // PUBLIC INFORMATION
     // =========================================================
 
-    public void Respawn()
+    public Vector3 GetSpawnPosition()
     {
-        // Respawn only in GameScene.
-        if (SceneManager.GetActiveScene().name != gameSceneName)
-            return;
+        return spawnPosition;
+    }
 
-        if (!IsOwner)
-            return;
-
-        if (!gameplayInitialized)
-            return;
-
-        if (SpawnPointsManager.Instance == null)
-            return;
-
-        if (IsServer)
-        {
-            Transform spawnPoint =
-                SpawnPointsManager.Instance.GetSpawnPoint(
-                    OwnerClientId
-                );
-
-            if (spawnPoint == null)
-                return;
-
-            respawnPosition = spawnPoint.position;
-            respawnRotation = spawnPoint.rotation;
-
-            PerformLocalRespawn(
-                respawnPosition,
-                respawnRotation,
-                false
-            );
-        }
-        else
-        {
-            RequestRespawnServerRpc();
-        }
+    public Quaternion GetSpawnRotation()
+    {
+        return spawnRotation;
     }
 }

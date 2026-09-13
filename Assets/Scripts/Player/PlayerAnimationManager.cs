@@ -15,7 +15,8 @@ public class PlayerAnimationManager : NetworkBehaviour
         RunningLeft = 3,
         RunningRight = 4,
         JumpingUp = 5,
-        JumpingDown = 6
+        JumpingDown = 6,
+        Death = 7
     }
 
     // =========================================================
@@ -28,6 +29,8 @@ public class PlayerAnimationManager : NetworkBehaviour
 
     [Header("Animation Settings")]
     [SerializeField] private float animationTransitionTime = 0.1f;
+
+    private RespawnManager respawnManager;
 
     // =========================================================
     // NETWORK STATE
@@ -43,18 +46,31 @@ public class PlayerAnimationManager : NetworkBehaviour
     private AnimationState currentAnimationState =
         AnimationState.Idle;
 
+    // =========================================================
+    // AWAKE
+    // =========================================================
+
     private void Awake()
     {
         if (animator == null)
         {
-            animator = GetComponentInChildren<Animator>();
+            animator =
+                GetComponentInChildren<Animator>();
         }
 
         if (playerMovement == null)
         {
-            playerMovement = GetComponent<PlayerMovement>();
+            playerMovement =
+                GetComponent<PlayerMovement>();
         }
+
+        respawnManager =
+            GetComponent<RespawnManager>();
     }
+
+    // =========================================================
+    // NETWORK SPAWN
+    // =========================================================
 
     public override void OnNetworkSpawn()
     {
@@ -63,9 +79,14 @@ public class PlayerAnimationManager : NetworkBehaviour
         networkAnimationState.OnValueChanged +=
             OnAnimationStateChanged;
 
-        // Apply the initial animation.
-        PlayAnimation(networkAnimationState.Value);
+        PlayAnimation(
+            networkAnimationState.Value
+        );
     }
+
+    // =========================================================
+    // NETWORK DESPAWN
+    // =========================================================
 
     public override void OnNetworkDespawn()
     {
@@ -84,22 +105,38 @@ public class PlayerAnimationManager : NetworkBehaviour
         if (!IsSpawned)
             return;
 
-        // Only the owning player decides
-        // which animation should be played.
-        if (IsOwner)
-        {
-            UpdateLocalAnimation();
-        }
+        if (!IsOwner)
+            return;
+
+        UpdateLocalAnimation();
     }
 
     // =========================================================
-    // LOCAL PLAYER
+    // LOCAL ANIMATION
     // =========================================================
 
     private void UpdateLocalAnimation()
     {
-        if (animator == null || playerMovement == null)
+        if (animator == null ||
+            playerMovement == null)
+        {
             return;
+        }
+
+        // -----------------------------------------------------
+        // DEAD
+        // -----------------------------------------------------
+
+        if (respawnManager != null &&
+            (respawnManager.IsDead.Value ||
+             respawnManager.DeathTriggeredLocally))
+        {
+            SetAnimationState(
+                AnimationState.Death
+            );
+
+            return;
+        }
 
         AnimationState newState;
 
@@ -115,16 +152,16 @@ public class PlayerAnimationManager : NetworkBehaviour
 
             if (verticalVelocity > 0.1f)
             {
-                newState = AnimationState.JumpingUp;
+                newState =
+                    AnimationState.JumpingUp;
             }
             else if (verticalVelocity < -0.1f)
             {
-                newState = AnimationState.JumpingDown;
+                newState =
+                    AnimationState.JumpingDown;
             }
             else
             {
-                // At the jump peak.
-                // Keep the current jump animation.
                 return;
             }
         }
@@ -142,27 +179,28 @@ public class PlayerAnimationManager : NetworkBehaviour
 
             if (input.sqrMagnitude <= 0.001f)
             {
-                newState = AnimationState.Idle;
+                newState =
+                    AnimationState.Idle;
             }
             else if (input.y > 0.1f)
             {
-                newState = AnimationState.RunningFront;
+                newState =
+                    AnimationState.RunningFront;
             }
             else if (input.y < -0.1f)
             {
-                newState = AnimationState.RunningBack;
+                newState =
+                    AnimationState.RunningBack;
             }
             else if (input.x < -0.1f)
             {
-                newState = AnimationState.RunningLeft;
-            }
-            else if (input.x > 0.1f)
-            {
-                newState = AnimationState.RunningRight;
+                newState =
+                    AnimationState.RunningLeft;
             }
             else
             {
-                newState = AnimationState.Idle;
+                newState =
+                    AnimationState.RunningRight;
             }
         }
 
@@ -170,25 +208,78 @@ public class PlayerAnimationManager : NetworkBehaviour
     }
 
     // =========================================================
-    // NETWORK ANIMATION
+    // SET ANIMATION STATE
     // =========================================================
 
-    private void SetAnimationState(AnimationState newState)
+    private void SetAnimationState(
+        AnimationState newState)
     {
-        if (networkAnimationState.Value == newState)
+        if (networkAnimationState.Value ==
+            newState)
+        {
             return;
+        }
 
-        networkAnimationState.Value = newState;
+        networkAnimationState.Value =
+            newState;
 
-        // Play immediately on the local player.
         PlayAnimation(newState);
     }
+
+    // =========================================================
+    // DEATH ANIMATION
+    // =========================================================
+
+    public void SetDeathAnimation()
+    {
+        if (!IsSpawned)
+            return;
+
+        if (!IsOwner)
+        {
+            PlayAnimation(
+                AnimationState.Death
+            );
+
+            return;
+        }
+
+        SetAnimationState(
+            AnimationState.Death
+        );
+    }
+
+    // =========================================================
+    // ALIVE ANIMATION
+    // =========================================================
+
+    public void SetAliveAnimation()
+    {
+        if (!IsSpawned)
+            return;
+
+        if (!IsOwner)
+        {
+            PlayAnimation(
+                AnimationState.Idle
+            );
+
+            return;
+        }
+
+        SetAnimationState(
+            AnimationState.Idle
+        );
+    }
+
+    // =========================================================
+    // NETWORK CALLBACK
+    // =========================================================
 
     private void OnAnimationStateChanged(
         AnimationState previousState,
         AnimationState newState)
     {
-        // Remote players receive the state here.
         PlayAnimation(newState);
     }
 
@@ -196,7 +287,8 @@ public class PlayerAnimationManager : NetworkBehaviour
     // PLAY ANIMATION
     // =========================================================
 
-    private void PlayAnimation(AnimationState state)
+    private void PlayAnimation(
+        AnimationState state)
     {
         if (animator == null)
             return;
@@ -204,9 +296,11 @@ public class PlayerAnimationManager : NetworkBehaviour
         if (currentAnimationState == state)
             return;
 
-        currentAnimationState = state;
+        currentAnimationState =
+            state;
 
-        string animationName = GetAnimationName(state);
+        string animationName =
+            GetAnimationName(state);
 
         animator.CrossFade(
             animationName,
@@ -214,7 +308,12 @@ public class PlayerAnimationManager : NetworkBehaviour
         );
     }
 
-    private string GetAnimationName(AnimationState state)
+    // =========================================================
+    // ANIMATION NAME
+    // =========================================================
+
+    private string GetAnimationName(
+        AnimationState state)
     {
         switch (state)
         {
@@ -235,6 +334,9 @@ public class PlayerAnimationManager : NetworkBehaviour
 
             case AnimationState.JumpingDown:
                 return "Jumping_Down";
+
+            case AnimationState.Death:
+                return "Death";
 
             case AnimationState.Idle:
             default:

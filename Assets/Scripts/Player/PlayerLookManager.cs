@@ -66,9 +66,7 @@ public class PlayerLookManager : NetworkBehaviour
             lastFirstPersonState =
                 CameraManager.Instance.IsFirstPerson;
 
-            SetPlayerModelVisible(
-                !lastFirstPersonState
-            );
+            RefreshPlayerModelVisibility();
         }
 
         // Set correct cursor state.
@@ -207,9 +205,7 @@ public class PlayerLookManager : NetworkBehaviour
             lastFirstPersonState =
                 currentFirstPersonState;
 
-            SetPlayerModelVisible(
-                !currentFirstPersonState
-            );
+            RefreshPlayerModelVisibility();
         }
 
         if (CameraManager.Instance.IsFirstPerson)
@@ -294,6 +290,46 @@ public class PlayerLookManager : NetworkBehaviour
     }
 
     // =========================================================
+    // REFRESH MODEL VISIBILITY
+    // =========================================================
+
+    public void RefreshPlayerModelVisibility()
+    {
+        if (!IsOwner)
+        {
+            SetPlayerModelVisible(true);
+            return;
+        }
+
+        if (CameraManager.Instance == null)
+            return;
+
+        bool firstPerson =
+            CameraManager.Instance.IsFirstPerson;
+
+        lastFirstPersonState =
+            firstPerson;
+
+        SetPlayerModelVisible(
+            !firstPerson
+        );
+    }
+
+    // =========================================================
+    // FORCE MODEL VISIBLE FOR DEATH
+    // =========================================================
+
+    public void ShowPlayerModelForDeath()
+    {
+        if (!IsOwner)
+            return;
+
+        // The dead player's body must be visible
+        // because the camera is now in third person.
+        SetPlayerModelVisible(true);
+    }
+
+    // =========================================================
     // THIRD PERSON LOOK
     // =========================================================
 
@@ -330,7 +366,7 @@ public class PlayerLookManager : NetworkBehaviour
     }
 
     // =========================================================
-    // RESET LOOK AFTER RESPAWN
+    // RESET LOOK AFTER NEW ROUND
     // =========================================================
 
     public void ResetLook(

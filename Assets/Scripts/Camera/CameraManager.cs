@@ -23,13 +23,13 @@ public class CameraManager : MonoBehaviour
     [Header("Third Person Camera Reset")]
     [SerializeField] private float thirdPersonVerticalAngle = 0f;
 
-    // Camera should be behind the player after respawn.
     [SerializeField] private float thirdPersonCameraAngleOffset = 0f;
 
     public bool IsFirstPerson { get; private set; }
 
-    private bool camerasBound = false;
+    public bool IsSpectatorMode { get; private set; }
 
+    private bool camerasBound;
     private bool cameraControlEnabled = true;
 
     private Transform localPlayer;
@@ -41,7 +41,8 @@ public class CameraManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
+        if (Instance != null &&
+            Instance != this)
         {
             Destroy(gameObject);
             return;
@@ -60,7 +61,6 @@ public class CameraManager : MonoBehaviour
     {
         ApplyStartingCamera();
 
-        // Network player may not exist yet.
         InvokeRepeating(
             nameof(TryBindToLocalPlayer),
             0.1f,
@@ -79,25 +79,12 @@ public class CameraManager : MonoBehaviour
             Instance = null;
         }
 
-        // Make sure Cinemachine is enabled
-        // when this object is destroyed.
         if (cinemachineBrain != null)
         {
             cinemachineBrain.enabled = true;
         }
 
-        if (thirdPersonCamera != null)
-        {
-            CinemachineInputAxisController inputController =
-                thirdPersonCamera.GetComponent<
-                    CinemachineInputAxisController
-                >();
-
-            if (inputController != null)
-            {
-                inputController.enabled = true;
-            }
-        }
+        SetThirdPersonInputEnabled(true);
     }
 
     // =========================================================
@@ -106,12 +93,14 @@ public class CameraManager : MonoBehaviour
 
     private void Update()
     {
-        // -----------------------------------------------------
-        // DO NOT PROCESS CAMERA INPUT WHEN DISABLED.
-        // -----------------------------------------------------
-
         if (!cameraControlEnabled)
             return;
+
+        if (IsSpectatorMode)
+        {
+            // V is disabled while spectating.
+            return;
+        }
 
         if (InputManager.Instance == null)
             return;
@@ -123,39 +112,44 @@ public class CameraManager : MonoBehaviour
     }
 
     // =========================================================
-    // CAMERA CONTROL ENABLE / DISABLE
+    // CAMERA CONTROL
     // =========================================================
 
-    public void SetCameraControlEnabled(bool enabled)
+    public void SetCameraControlEnabled(
+        bool enabled)
     {
         cameraControlEnabled = enabled;
 
-        // -----------------------------------------------------
-        // IMPORTANT:
-        //
-        // Do NOT disable the Cinemachine Brain.
-        //
-        // The Brain must remain enabled so the camera can
-        // continue following the player while paused.
-        // -----------------------------------------------------
-
-        if (thirdPersonCamera != null)
-        {
-            CinemachineInputAxisController inputController =
-                thirdPersonCamera.GetComponent<
-                    CinemachineInputAxisController
-                >();
-
-            if (inputController != null)
-            {
-                inputController.enabled = enabled;
-            }
-        }
+        SetThirdPersonInputEnabled(
+            enabled
+        );
 
         Debug.Log(
             $"CameraManager: Camera input " +
             $"{(enabled ? "enabled" : "disabled")}."
         );
+    }
+
+    // =========================================================
+    // THIRD PERSON INPUT
+    // =========================================================
+
+    private void SetThirdPersonInputEnabled(
+        bool enabled)
+    {
+        if (thirdPersonCamera == null)
+            return;
+
+        CinemachineInputAxisController inputController =
+            thirdPersonCamera.GetComponent<
+                CinemachineInputAxisController
+            >();
+
+        if (inputController != null)
+        {
+            inputController.enabled =
+                enabled;
+        }
     }
 
     // =========================================================
@@ -187,65 +181,52 @@ public class CameraManager : MonoBehaviour
 
         camerasBound = true;
 
-        CancelInvoke(nameof(TryBindToLocalPlayer));
+        CancelInvoke(
+            nameof(TryBindToLocalPlayer)
+        );
     }
 
     // =========================================================
     // BIND CAMERAS
     // =========================================================
 
-    private void BindCamerasToPlayer(Transform player)
+    private void BindCamerasToPlayer(
+        Transform player)
     {
         if (player == null)
             return;
 
         localPlayer = player;
 
-        // Find the first-person target inside
-        // the local player.
         firstPersonTarget =
             player.Find("FirstPerson Target");
 
-        if (firstPersonTarget == null)
-        {
-            Debug.LogWarning(
-                "CameraManager: " +
-                "FirstPerson Target was not found."
-            );
-        }
-
-        // -----------------------------------------------------
-        // THIRD PERSON CAMERA
-        // -----------------------------------------------------
+        Transform target =
+            firstPersonTarget != null
+                ? firstPersonTarget
+                : player;
 
         if (thirdPersonCamera != null)
         {
-            Transform target =
-                firstPersonTarget != null
-                    ? firstPersonTarget
-                    : player;
+            thirdPersonCamera.Follow =
+                target;
 
-            thirdPersonCamera.Follow = target;
-            thirdPersonCamera.LookAt = target;
+            thirdPersonCamera.LookAt =
+                target;
         }
-
-        // -----------------------------------------------------
-        // FIRST PERSON CAMERA
-        // -----------------------------------------------------
 
         if (firstPersonCamera != null)
         {
-            Transform target =
-                firstPersonTarget != null
-                    ? firstPersonTarget
-                    : player;
+            firstPersonCamera.Follow =
+                target;
 
-            firstPersonCamera.Follow = target;
-            firstPersonCamera.LookAt = target;
+            firstPersonCamera.LookAt =
+                target;
         }
 
         Debug.Log(
-            $"CameraManager: Cameras bound to {player.name}."
+            $"CameraManager: Cameras bound to " +
+            $"{player.name}."
         );
     }
 
@@ -255,9 +236,10 @@ public class CameraManager : MonoBehaviour
 
     public void ToggleCameraView()
     {
-        // IMPORTANT:
-        // Never allow camera switching while paused/settings.
         if (!cameraControlEnabled)
+            return;
+
+        if (IsSpectatorMode)
             return;
 
         if (IsFirstPerson)
@@ -285,6 +267,10 @@ public class CameraManager : MonoBehaviour
             firstPersonCamera.Priority =
                 inactivePriority;
         }
+
+        SetThirdPersonInputEnabled(
+            cameraControlEnabled
+        );
     }
 
     private void SetFirstPersonView()
@@ -302,10 +288,126 @@ public class CameraManager : MonoBehaviour
             firstPersonCamera.Priority =
                 activePriority;
         }
+
+        SetThirdPersonInputEnabled(false);
     }
 
     // =========================================================
-    // RESET CAMERA AFTER RESPAWN
+    // ENTER SPECTATOR MODE
+    // =========================================================
+
+    public void EnterSpectatorMode(
+        Transform target)
+    {
+        if (target == null)
+            return;
+
+        IsSpectatorMode = true;
+
+        cameraControlEnabled = true;
+
+        // Force third person.
+        SetThirdPersonView();
+
+        // Follow the dead player's body first.
+        SetSpectatorTarget(target);
+
+        // Allow orbital camera movement.
+        SetThirdPersonInputEnabled(true);
+
+        Debug.Log(
+            $"CameraManager: Spectator mode entered. " +
+            $"Target = {target.name}"
+        );
+    }
+
+    // =========================================================
+    // SET SPECTATOR TARGET
+    // =========================================================
+
+    public void SetSpectatorTarget(
+        Transform target)
+    {
+        if (target == null)
+            return;
+
+        if (thirdPersonCamera == null)
+            return;
+
+        Transform targetPoint =
+            target.Find("FirstPerson Target");
+
+        if (targetPoint == null)
+        {
+            targetPoint = target;
+        }
+
+        thirdPersonCamera.Follow =
+            targetPoint;
+
+        thirdPersonCamera.LookAt =
+            targetPoint;
+
+        // Make sure third person is active.
+        IsFirstPerson = false;
+
+        thirdPersonCamera.Priority =
+            activePriority;
+
+        if (firstPersonCamera != null)
+        {
+            firstPersonCamera.Priority =
+                inactivePriority;
+        }
+
+        Debug.Log(
+            $"CameraManager: Spectator target changed to " +
+            $"{target.name}."
+        );
+    }
+
+    // =========================================================
+    // RESET FOR NEW ROUND
+    // =========================================================
+
+    public void ResetForNewRound(
+        Transform player,
+        Quaternion playerRotation)
+    {
+        if (player == null)
+            return;
+
+        IsSpectatorMode = false;
+
+        cameraControlEnabled = true;
+
+        camerasBound = true;
+
+        BindCamerasToPlayer(player);
+
+        // Reset player camera based on the user's
+        // Starting Camera setting.
+        ApplyStartingCamera();
+
+        if (!IsFirstPerson)
+        {
+            ResetThirdPersonCamera(
+                player,
+                playerRotation
+            );
+        }
+
+        SetThirdPersonInputEnabled(
+            !IsFirstPerson
+        );
+
+        Debug.Log(
+            "CameraManager: Camera reset for new round."
+        );
+    }
+
+    // =========================================================
+    // RESET THIRD PERSON CAMERA
     // =========================================================
 
     public void ResetThirdPersonCamera(
@@ -318,10 +420,6 @@ public class CameraManager : MonoBehaviour
         if (thirdPersonCamera == null)
             return;
 
-        // -----------------------------------------------------
-        // Make sure the camera is following THIS local player.
-        // -----------------------------------------------------
-
         Transform target =
             player.Find("FirstPerson Target");
 
@@ -330,12 +428,11 @@ public class CameraManager : MonoBehaviour
             target = player;
         }
 
-        thirdPersonCamera.Follow = target;
-        thirdPersonCamera.LookAt = target;
+        thirdPersonCamera.Follow =
+            target;
 
-        // -----------------------------------------------------
-        // Reset Cinemachine Orbital Follow.
-        // -----------------------------------------------------
+        thirdPersonCamera.LookAt =
+            target;
 
         CinemachineOrbitalFollow orbitalFollow =
             thirdPersonCamera.GetComponent<
@@ -344,18 +441,18 @@ public class CameraManager : MonoBehaviour
 
         if (orbitalFollow != null)
         {
-            // Player's respawn direction.
             float playerYaw =
                 respawnRotation.eulerAngles.y;
 
-            // Put the camera behind the player.
             float cameraYaw =
                 playerYaw +
                 thirdPersonCameraAngleOffset;
 
-            // Normalize angle to 0-360.
             cameraYaw =
-                Mathf.Repeat(cameraYaw, 360f);
+                Mathf.Repeat(
+                    cameraYaw,
+                    360f
+                );
 
             orbitalFollow.HorizontalAxis.Value =
                 cameraYaw;
@@ -364,27 +461,12 @@ public class CameraManager : MonoBehaviour
                 thirdPersonVerticalAngle;
         }
 
-        // -----------------------------------------------------
-        // Tell Cinemachine not to use previous state.
-        // -----------------------------------------------------
-
-        if (cinemachineBrain != null)
+        if (cinemachineBrain != null &&
+            cinemachineBrain.enabled)
         {
-            // Only invalidate camera state if the brain
-            // is currently enabled.
-            if (cinemachineBrain.enabled)
-            {
-                thirdPersonCamera.PreviousStateIsValid =
-                    false;
-            }
+            thirdPersonCamera.PreviousStateIsValid =
+                false;
         }
-
-        Debug.Log(
-            $"CameraManager: " +
-            $"Third-person camera reset. " +
-            $"Player yaw = " +
-            $"{respawnRotation.eulerAngles.y}"
-        );
     }
 
     // =========================================================
