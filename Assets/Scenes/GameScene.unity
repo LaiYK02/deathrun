@@ -1845,6 +1845,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrosshairManager
   crosshair: {fileID: 1427000602}
+  crosshairImage: {fileID: 1427000604}
+  normalCrosshair: {fileID: 21300000, guid: a50949fee1c778c4da2c2bf526769b5c, type: 3}
+  funnyCrosshair: {fileID: 21300000, guid: dda8daeaca0c54a4e82a79296a509f90, type: 3}
 --- !u!4 &255837129
 Transform:
   m_ObjectHideFlags: 0
@@ -6547,7 +6550,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 20, y: 20}
+  m_SizeDelta: {x: 50, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1427000604
 MonoBehaviour:
@@ -6569,7 +6572,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 99cf07e53954aa243baeaf79f6d43f4e, type: 3}
+  m_Sprite: {fileID: 21300000, guid: a50949fee1c778c4da2c2bf526769b5c, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
