@@ -414,16 +414,39 @@ public class PauseMenuManager : MonoBehaviour
         }
 
         // -----------------------------------------------------
-        // ENABLE LOCAL PLAYER CONTROL
+        // RESTORE PLAYER / CAMERA CONTROL
         // -----------------------------------------------------
 
-        SetPlayerInputEnabled(true);
+        RespawnManager respawnManager = null;
 
-        // -----------------------------------------------------
-        // ENABLE CAMERA CONTROL
-        // -----------------------------------------------------
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkObject player =
+                NetworkManager.Singleton
+                    .LocalClient?
+                    .PlayerObject;
 
-        SetCameraControlEnabled(true);
+            if (player != null)
+            {
+                respawnManager =
+                    player.GetComponent<RespawnManager>();
+            }
+        }
+
+        bool playerIsDead =
+            respawnManager != null &&
+            respawnManager.IsDead.Value;
+
+        if (playerIsDead)
+        {
+            SetPlayerInputEnabled(false);
+            SetCameraControlEnabled(true);
+        }
+        else
+        {
+            SetPlayerInputEnabled(true);
+            SetCameraControlEnabled(true);
+        }
 
         // -----------------------------------------------------
         // LOCK MOUSE
@@ -458,17 +481,16 @@ public class PauseMenuManager : MonoBehaviour
             }
         }
 
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
         // DEAD PLAYER
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
 
         if (respawnManager != null &&
             respawnManager.IsDead.Value)
         {
             if (localPlayerMovement != null)
             {
-                localPlayerMovement
-                    .SetMovementControlEnabled(false);
+                localPlayerMovement.SetMovementControlEnabled(false);
             }
 
             if (localPlayerLook != null)
@@ -479,14 +501,15 @@ public class PauseMenuManager : MonoBehaviour
             return;
         }
 
-        // -----------------------------------------------------
-        // NORMAL PLAYER
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
+        // ALIVE PLAYER
+        // ---------------------------------------------------------
 
         if (localPlayerMovement != null)
         {
-            localPlayerMovement
-                .SetMovementControlEnabled(enabled);
+            localPlayerMovement.SetMovementControlEnabled(
+                enabled
+            );
         }
 
         if (localPlayerLook != null)

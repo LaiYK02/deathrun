@@ -74,9 +74,24 @@ public class DeathSpectatorManager : MonoBehaviour
         if (localPlayer == null)
             return;
 
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
+        // PAUSE MENU
+        // ---------------------------------------------------------
+
+        if (PauseMenuManager.Instance != null &&
+            PauseMenuManager.Instance.IsPaused)
+        {
+            if (CameraManager.Instance != null)
+            {
+                CameraManager.Instance.SetCameraControlEnabled(false);
+            }
+
+            return;
+        }
+
+        // ---------------------------------------------------------
         // PLAYER ALIVE
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
 
         if (!localPlayer.IsDead.Value)
         {
@@ -86,18 +101,18 @@ public class DeathSpectatorManager : MonoBehaviour
             return;
         }
 
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
         // ENTER SPECTATOR
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
 
         if (!spectatorActive)
         {
             EnterSpectator();
         }
 
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
         // MOUSE 1
-        // -----------------------------------------------------
+        // ---------------------------------------------------------
 
         if (Mouse.current != null &&
             Mouse.current.leftButton.wasPressedThisFrame)

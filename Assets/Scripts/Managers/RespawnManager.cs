@@ -526,30 +526,34 @@ public class RespawnManager : NetworkBehaviour
         // RESET MOVEMENT
         // -----------------------------------------------------
 
-        PlayerMovement playerMovement =
-            GetComponent<PlayerMovement>();
+        PlayerMovement playerMovement = GetComponent<PlayerMovement>();
 
         if (playerMovement != null)
         {
             playerMovement.ResetVelocity();
 
-            playerMovement.SetMovementControlEnabled(
-                true
-            );
+            bool pauseIsOpen =
+                PauseMenuManager.Instance != null &&
+                PauseMenuManager.Instance.IsPaused;
+
+            playerMovement.SetMovementControlEnabled(!pauseIsOpen);
         }
 
         // -----------------------------------------------------
         // RESET LOOK
         // -----------------------------------------------------
 
-        PlayerLookManager playerLook =
-            GetComponent<PlayerLookManager>();
+        PlayerLookManager playerLook = GetComponent<PlayerLookManager>();
 
         if (playerLook != null)
         {
             playerLook.ResetLook(rotation);
 
-            playerLook.enabled = true;
+            bool pauseIsOpen =
+                PauseMenuManager.Instance != null &&
+                PauseMenuManager.Instance.IsPaused;
+
+            playerLook.enabled = !pauseIsOpen;
         }
 
         // -----------------------------------------------------
@@ -574,6 +578,17 @@ public class RespawnManager : NetworkBehaviour
                 transform,
                 rotation
             );
+
+            bool pauseIsOpen =
+                PauseMenuManager.Instance != null &&
+                PauseMenuManager.Instance.IsPaused;
+
+            if (pauseIsOpen)
+            {
+                CameraManager.Instance.SetCameraControlEnabled(
+                    false
+                );
+            }
         }
 
         // -----------------------------------------------------
