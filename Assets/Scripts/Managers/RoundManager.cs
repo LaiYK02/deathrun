@@ -3,12 +3,30 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
+public enum RoundPhase
+{
+    Warmup,
+    Active,
+    Ending
+}
+
 public class RoundManager : NetworkBehaviour
 {
     public static RoundManager Instance { get; private set; }
 
-    [Header("Round Settings")]
+    public const ulong NoTrapper = ulong.MaxValue;
+
+    [Header("Warmup")]
+    [SerializeField] private float warmupDuration = 30f;
+
+    [SerializeField] private float trapperSelectionTime = 5f;
+
+    [Header("Round")]
     [SerializeField] private float nextRoundDelay = 5f;
+
+    [Header("Player Prefabs")]
+    [SerializeField] private GameObject runnerPrefab;
+    [SerializeField] private GameObject trapperPrefab;
 
     public NetworkVariable<int> CurrentRound =
         new NetworkVariable<int>(
@@ -17,12 +35,36 @@ public class RoundManager : NetworkBehaviour
             NetworkVariableWritePermission.Server
         );
 
+    public NetworkVariable<RoundPhase> Phase =
+        new NetworkVariable<RoundPhase>(
+            RoundPhase.Warmup,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public NetworkVariable<int> PhaseTimeRemaining =
+        new NetworkVariable<int>(
+            30,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public NetworkVariable<ulong> TrapperClientId =
+        new NetworkVariable<ulong>(
+            NoTrapper,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+    public bool IsRoundActive =>
+        Phase.Value == RoundPhase.Active;
+
     private readonly HashSet<ulong> deadPlayers =
         new HashSet<ulong>();
 
-    private Coroutine nextRoundCoroutine;
+    private Coroutine roundFlowCoroutine;
 
-    private bool roundEnding;
+    private bool roundEndingBecauseTrapperDied;
 
     // =========================================================
     // AWAKE
@@ -53,12 +95,12 @@ public class RoundManager : NetworkBehaviour
             NetworkManager.Singleton
                 .OnClientDisconnectCallback +=
                 OnClientDisconnected;
-        }
 
-        Debug.Log(
-            $"RoundManager: Round " +
-            $"{CurrentRound.Value} started."
-        );
+            roundFlowCoroutine =
+                StartCoroutine(
+                    StartGameFlow()
+                );
+        }
     }
 
     // =========================================================
@@ -75,16 +117,235 @@ public class RoundManager : NetworkBehaviour
                 OnClientDisconnected;
         }
 
-        if (nextRoundCoroutine != null)
+        if (roundFlowCoroutine != null)
         {
-            StopCoroutine(
-                nextRoundCoroutine
-            );
-
-            nextRoundCoroutine = null;
+            StopCoroutine(roundFlowCoroutine);
+            roundFlowCoroutine = null;
         }
 
         base.OnNetworkDespawn();
+    }
+
+    // =========================================================
+    // GAME START
+    // =========================================================
+
+    private IEnumerator StartGameFlow()
+    {
+        Phase.Value = RoundPhase.Warmup;
+        PhaseTimeRemaining.Value =
+            Mathf.CeilToInt(warmupDuration);
+
+        TrapperClientId.Value =
+            NoTrapper;
+
+        deadPlayers.Clear();
+
+        Debug.Log(
+            "RoundManager: Waiting for all players..."
+        );
+
+        while (!AllClientsHavePlayerObjects())
+        {
+            yield return null;
+        }
+
+        // Everyone starts as Runner.
+        SetAllPlayersAsRunners();
+
+        Debug.Log(
+            $"RoundManager: {warmupDuration} second warmup started."
+        );
+
+        yield return StartCoroutine(
+            WarmupCountdown()
+        );
+
+        // Warmup has finished.
+        BeginActiveRound();
+    }
+
+    // =========================================================
+    // WARMUP
+    // =========================================================
+
+    private IEnumerator WarmupCountdown()
+    {
+        float elapsed = 0f;
+
+        bool trapperSelected = false;
+
+        int lastDisplayedSecond = -1;
+
+        while (elapsed < warmupDuration)
+        {
+            int remaining =
+                Mathf.CeilToInt(
+                    warmupDuration - elapsed
+                );
+
+            if (remaining != lastDisplayedSecond)
+            {
+                PhaseTimeRemaining.Value =
+                    remaining;
+
+                lastDisplayedSecond =
+                    remaining;
+            }
+
+            // Select the Trapper 5 seconds
+            // before warmup ends.
+            if (!trapperSelected &&
+                elapsed >=
+                warmupDuration -
+                trapperSelectionTime)
+            {
+                SelectInitialTrapper();
+
+                trapperSelected = true;
+            }
+
+            elapsed += Time.deltaTime;
+
+            yield return null;
+        }
+
+        PhaseTimeRemaining.Value = 0;
+    }
+
+    // =========================================================
+    // INITIAL TRAPPER
+    // =========================================================
+
+    private void SelectInitialTrapper()
+    {
+        List<ulong> clients =
+            new List<ulong>(
+                NetworkManager.Singleton
+                    .ConnectedClientsIds
+            );
+
+        if (clients.Count < 2)
+        {
+            TrapperClientId.Value =
+                NoTrapper;
+
+            Debug.Log(
+                "RoundManager: Only one player. " +
+                "No Trapper selected."
+            );
+
+            return;
+        }
+
+        ulong selectedClient =
+            clients[
+                Random.Range(
+                    0,
+                    clients.Count
+                )
+            ];
+
+        TrapperClientId.Value =
+            selectedClient;
+
+        Debug.Log(
+            $"RoundManager: Client {selectedClient} " +
+            $"has been selected as the Trapper."
+        );
+
+        SwitchPlayerPrefab(
+            selectedClient,
+            PlayerRole.Trapper
+        );
+    }
+
+    // =========================================================
+    // BEGIN ACTIVE ROUND
+    // =========================================================
+
+    private void BeginActiveRound()
+    {
+        if (!IsServer)
+            return;
+
+        deadPlayers.Clear();
+
+        SpawnPlayersForCurrentRound();
+
+        Phase.Value =
+            RoundPhase.Active;
+
+        PhaseTimeRemaining.Value = 0;
+
+        Debug.Log(
+            $"RoundManager: Round " +
+            $"{CurrentRound.Value} is now ACTIVE."
+        );
+    }
+
+    // =========================================================
+    // SPAWN PLAYERS
+    // =========================================================
+
+    private void SpawnPlayersForCurrentRound()
+    {
+        foreach (ulong clientId
+                 in NetworkManager.Singleton
+                     .ConnectedClientsIds)
+        {
+            NetworkClient client =
+                NetworkManager.Singleton
+                    .ConnectedClients[clientId];
+
+            if (client.PlayerObject == null)
+                continue;
+
+            PlayerRoleManager roleManager =
+                client.PlayerObject
+                    .GetComponent<PlayerRoleManager>();
+
+            RespawnManager respawnManager =
+                client.PlayerObject
+                    .GetComponent<RespawnManager>();
+
+            if (respawnManager == null)
+                continue;
+
+            bool isTrapper =
+                roleManager != null &&
+                roleManager.IsTrapper;
+
+            Transform spawnPoint;
+
+            if (isTrapper)
+            {
+                spawnPoint =
+                    SpawnPointsManager.Instance
+                        .GetTrapperSpawnPoint();
+            }
+            else
+            {
+                spawnPoint =
+                    SpawnPointsManager.Instance
+                        .GetSpawnPoint(clientId);
+            }
+
+            if (spawnPoint == null)
+            {
+                Debug.LogError(
+                    $"RoundManager: No spawn point " +
+                    $"for Client {clientId}."
+                );
+
+                continue;
+            }
+
+            respawnManager.ResetForNewRound(
+                spawnPoint.position,
+                spawnPoint.rotation
+            );
+        }
     }
 
     // =========================================================
@@ -97,7 +358,7 @@ public class RoundManager : NetworkBehaviour
         if (!IsServer)
             return;
 
-        if (roundEnding)
+        if (Phase.Value != RoundPhase.Active)
             return;
 
         if (deadPlayers.Contains(clientId))
@@ -105,118 +366,60 @@ public class RoundManager : NetworkBehaviour
 
         deadPlayers.Add(clientId);
 
+        NetworkClient client =
+            NetworkManager.Singleton
+                .ConnectedClients.ContainsKey(clientId)
+                ? NetworkManager.Singleton
+                    .ConnectedClients[clientId]
+                : null;
+
+        PlayerRoleManager roleManager =
+            client != null &&
+            client.PlayerObject != null
+                ? client.PlayerObject
+                    .GetComponent<PlayerRoleManager>()
+                : null;
+
+        bool playerWasTrapper =
+            roleManager != null &&
+            roleManager.IsTrapper;
+
         Debug.Log(
             $"RoundManager: Client {clientId} died. " +
-            $"Dead players = " +
-            $"{deadPlayers.Count}/" +
-            $"{NetworkManager.Singleton.ConnectedClientsIds.Count}"
+            $"Role = " +
+            $"{(playerWasTrapper ? "Trapper" : "Runner")}."
         );
-
-        if (AllPlayersDead())
-        {
-            StartNextRoundCountdown();
-        }
-    }
-
-    // =========================================================
-    // ALL PLAYERS DEAD
-    // =========================================================
-
-    private bool AllPlayersDead()
-    {
-        if (NetworkManager.Singleton == null)
-            return false;
-
-        int playerCount =
-            NetworkManager.Singleton
-                .ConnectedClientsIds
-                .Count;
-
-        if (playerCount <= 0)
-            return false;
-
-        foreach (ulong clientId in
-                 NetworkManager.Singleton
-                     .ConnectedClientsIds)
-        {
-            if (!deadPlayers.Contains(clientId))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    // =========================================================
-    // START COUNTDOWN
-    // =========================================================
-
-    private void StartNextRoundCountdown()
-    {
-        if (roundEnding)
-            return;
-
-        roundEnding = true;
-
-        nextRoundCoroutine =
-            StartCoroutine(
-                NextRoundCountdown()
-            );
-    }
-
-    private IEnumerator NextRoundCountdown()
-    {
-        Debug.Log(
-            $"RoundManager: All players dead. " +
-            $"Next round in {nextRoundDelay} seconds."
-        );
-
-        yield return new WaitForSeconds(
-            nextRoundDelay
-        );
-
-        // A player could disconnect during the
-        // countdown.
-        if (!AllPlayersDead())
-        {
-            roundEnding = false;
-            nextRoundCoroutine = null;
-
-            yield break;
-        }
-
-        StartNewRound();
-
-        nextRoundCoroutine = null;
-    }
-
-    // =========================================================
-    // START NEW ROUND
-    // =========================================================
-
-    private void StartNewRound()
-    {
-        if (!IsServer)
-            return;
-
-        CurrentRound.Value++;
-
-        Debug.Log(
-            $"RoundManager: Starting Round " +
-            $"{CurrentRound.Value}."
-        );
-
-        deadPlayers.Clear();
-
-        roundEnding = false;
 
         // -----------------------------------------------------
-        // RESET EVERY PLAYER
+        // TRAPPER DIED
         // -----------------------------------------------------
 
-        foreach (ulong clientId in
-                 NetworkManager.Singleton
+        if (playerWasTrapper)
+        {
+            StartRoundEnding(true);
+            return;
+        }
+
+        // -----------------------------------------------------
+        // ALL RUNNERS DIED
+        // -----------------------------------------------------
+
+        if (AreAllRunnersDead())
+        {
+            StartRoundEnding(false);
+        }
+    }
+
+    // =========================================================
+    // ALL RUNNERS DEAD
+    // =========================================================
+
+    private bool AreAllRunnersDead()
+    {
+        int runnerCount = 0;
+
+        foreach (ulong clientId
+                 in NetworkManager.Singleton
                      .ConnectedClientsIds)
         {
             NetworkClient client =
@@ -226,33 +429,379 @@ public class RoundManager : NetworkBehaviour
             if (client.PlayerObject == null)
                 continue;
 
+            PlayerRoleManager roleManager =
+                client.PlayerObject
+                    .GetComponent<PlayerRoleManager>();
+
+            if (roleManager == null ||
+                !roleManager.IsRunner)
+            {
+                continue;
+            }
+
+            runnerCount++;
+
             RespawnManager respawnManager =
                 client.PlayerObject
                     .GetComponent<RespawnManager>();
 
-            if (respawnManager == null)
-                continue;
+            if (respawnManager != null &&
+                !respawnManager.IsDead.Value)
+            {
+                return false;
+            }
+        }
 
-            if (SpawnPointsManager.Instance == null)
-                continue;
+        return runnerCount > 0;
+    }
 
-            Transform spawnPoint =
-                SpawnPointsManager.Instance
-                    .GetSpawnPoint(clientId);
+    // =========================================================
+    // START ROUND ENDING
+    // =========================================================
 
-            if (spawnPoint == null)
-                continue;
+    private void StartRoundEnding(
+        bool trapperDied)
+    {
+        if (Phase.Value == RoundPhase.Ending)
+            return;
 
-            respawnManager.ResetForNewRound(
-                spawnPoint.position,
-                spawnPoint.rotation
+        roundEndingBecauseTrapperDied =
+            trapperDied;
+
+        Phase.Value =
+            RoundPhase.Ending;
+
+        PhaseTimeRemaining.Value =
+            Mathf.CeilToInt(
+                nextRoundDelay
+            );
+
+        string reason =
+            trapperDied
+                ? "Trapper died"
+                : "All runners died";
+
+        Debug.Log(
+            "RoundManager: Round ending. " +
+            $"Reason = {reason}."
+        );
+
+        if (roundFlowCoroutine != null)
+        {
+            StopCoroutine(
+                roundFlowCoroutine
             );
         }
 
+        roundFlowCoroutine =
+            StartCoroutine(
+                RoundEndCountdown()
+            );
+    }
+
+    // =========================================================
+    // ROUND END COUNTDOWN
+    // =========================================================
+
+    private IEnumerator RoundEndCountdown()
+    {
+        float elapsed = 0f;
+
+        int lastDisplayedSecond = -1;
+
+        while (elapsed < nextRoundDelay)
+        {
+            int remaining =
+                Mathf.CeilToInt(
+                    nextRoundDelay - elapsed
+                );
+
+            if (remaining != lastDisplayedSecond)
+            {
+                PhaseTimeRemaining.Value =
+                    remaining;
+
+                lastDisplayedSecond =
+                    remaining;
+            }
+
+            elapsed += Time.deltaTime;
+
+            yield return null;
+        }
+
+        PhaseTimeRemaining.Value = 0;
+
+        StartNextRound();
+
+        roundFlowCoroutine = null;
+    }
+
+    // =========================================================
+    // NEXT ROUND
+    // =========================================================
+
+    private void StartNextRound()
+    {
+        if (!IsServer)
+            return;
+
+        CurrentRound.Value++;
+
+        deadPlayers.Clear();
+
+        Debug.Log(
+            $"RoundManager: Starting Round " +
+            $"{CurrentRound.Value}."
+        );
+
+        // If the Trapper died,
+        // choose a new Trapper.
+        if (roundEndingBecauseTrapperDied)
+        {
+            ChooseReplacementTrapper();
+        }
+
+        roundEndingBecauseTrapperDied =
+            false;
+
+        SpawnPlayersForCurrentRound();
+
+        Phase.Value =
+            RoundPhase.Active;
+
+        PhaseTimeRemaining.Value = 0;
+
         Debug.Log(
             $"RoundManager: Round " +
-            $"{CurrentRound.Value} is now active."
+            $"{CurrentRound.Value} is ACTIVE."
         );
+    }
+
+    // =========================================================
+    // REPLACE TRAPPER
+    // =========================================================
+
+    private void ChooseReplacementTrapper()
+    {
+        ulong previousTrapper =
+            TrapperClientId.Value;
+
+        // First turn the old Trapper back
+        // into a Runner.
+        if (previousTrapper != NoTrapper &&
+            NetworkManager.Singleton
+                .ConnectedClients
+                .ContainsKey(previousTrapper))
+        {
+            SwitchPlayerPrefab(
+                previousTrapper,
+                PlayerRole.Runner
+            );
+        }
+
+        List<ulong> candidates =
+            new List<ulong>();
+
+        foreach (ulong clientId
+                 in NetworkManager.Singleton
+                     .ConnectedClientsIds)
+        {
+            if (clientId == previousTrapper)
+                continue;
+
+            candidates.Add(clientId);
+        }
+
+        if (candidates.Count == 0)
+        {
+            TrapperClientId.Value =
+                NoTrapper;
+
+            Debug.Log(
+                "RoundManager: No replacement Trapper available."
+            );
+
+            return;
+        }
+
+        ulong newTrapper =
+            candidates[
+                Random.Range(
+                    0,
+                    candidates.Count
+                )
+            ];
+
+        TrapperClientId.Value =
+            newTrapper;
+
+        SwitchPlayerPrefab(
+            newTrapper,
+            PlayerRole.Trapper
+        );
+
+        Debug.Log(
+            $"RoundManager: New Trapper = " +
+            $"Client {newTrapper}."
+        );
+    }
+
+    // =========================================================
+    // SWITCH PLAYER PREFAB
+    // =========================================================
+
+    private bool SwitchPlayerPrefab(
+        ulong clientId,
+        PlayerRole desiredRole)
+    {
+        if (!IsServer)
+            return false;
+
+        if (runnerPrefab == null ||
+            trapperPrefab == null)
+        {
+            Debug.LogError(
+                "RoundManager: Runner or Trapper prefab " +
+                "has not been assigned."
+            );
+
+            return false;
+        }
+
+        if (!NetworkManager.Singleton
+                .ConnectedClients
+                .ContainsKey(clientId))
+        {
+            return false;
+        }
+
+        NetworkClient client =
+            NetworkManager.Singleton
+                .ConnectedClients[clientId];
+
+        NetworkObject oldPlayer =
+            client.PlayerObject;
+
+        if (oldPlayer == null)
+            return false;
+
+        PlayerRoleManager currentRole =
+            oldPlayer.GetComponent<PlayerRoleManager>();
+
+        if (currentRole != null &&
+            currentRole.Role.Value ==
+            desiredRole)
+        {
+            return true;
+        }
+
+        Vector3 position =
+            oldPlayer.transform.position;
+
+        Quaternion rotation =
+            oldPlayer.transform.rotation;
+
+        GameObject prefab =
+            desiredRole == PlayerRole.Trapper
+                ? trapperPrefab
+                : runnerPrefab;
+
+        Debug.Log(
+            $"RoundManager: Switching Client {clientId} " +
+            $"to {desiredRole}."
+        );
+
+        // Remove old player object.
+        oldPlayer.Despawn(true);
+
+        // Create new player object.
+        GameObject newPlayer =
+            Instantiate(
+                prefab,
+                position,
+                rotation
+            );
+
+        NetworkObject newNetworkObject =
+            newPlayer.GetComponent<NetworkObject>();
+
+        if (newNetworkObject == null)
+        {
+            Debug.LogError(
+                $"RoundManager: {prefab.name} does not " +
+                $"have a NetworkObject."
+            );
+
+            Destroy(newPlayer);
+            return false;
+        }
+
+        // Make the new object the player's
+        // official NetworkObject.
+        newNetworkObject.SpawnAsPlayerObject(
+            clientId,
+            true
+        );
+
+        return true;
+    }
+
+    // =========================================================
+    // SET EVERYONE TO RUNNER
+    // =========================================================
+
+    private void SetAllPlayersAsRunners()
+    {
+        foreach (ulong clientId
+                 in NetworkManager.Singleton
+                     .ConnectedClientsIds)
+        {
+            SwitchPlayerPrefab(
+                clientId,
+                PlayerRole.Runner
+            );
+        }
+
+        TrapperClientId.Value =
+            NoTrapper;
+    }
+
+    // =========================================================
+    // CHECK PLAYER OBJECTS
+    // =========================================================
+
+    private bool AllClientsHavePlayerObjects()
+    {
+        if (NetworkManager.Singleton == null)
+            return false;
+
+        if (NetworkManager.Singleton
+                .ConnectedClientsIds.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (ulong clientId
+                 in NetworkManager.Singleton
+                     .ConnectedClientsIds)
+        {
+            if (!NetworkManager.Singleton
+                    .ConnectedClients
+                    .ContainsKey(clientId))
+            {
+                return false;
+            }
+
+            if (NetworkManager.Singleton
+                    .ConnectedClients[clientId]
+                    .PlayerObject == null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // =========================================================
@@ -267,26 +816,27 @@ public class RoundManager : NetworkBehaviour
 
         deadPlayers.Remove(clientId);
 
-        // If someone disconnects during the
-        // 5-second countdown, check again.
-        if (roundEnding &&
-            !AllPlayersDead())
+        // -----------------------------------------------------
+        // TRAPPER DISCONNECTED
+        // -----------------------------------------------------
+
+        if (Phase.Value == RoundPhase.Active &&
+            clientId == TrapperClientId.Value)
         {
-            if (nextRoundCoroutine != null)
+            StartRoundEnding(true);
+            return;
+        }
+
+        // -----------------------------------------------------
+        // RUNNER DISCONNECTED
+        // -----------------------------------------------------
+
+        if (Phase.Value == RoundPhase.Active)
+        {
+            if (AreAllRunnersDead())
             {
-                StopCoroutine(
-                    nextRoundCoroutine
-                );
-
-                nextRoundCoroutine = null;
+                StartRoundEnding(false);
             }
-
-            roundEnding = false;
-
-            Debug.Log(
-                "RoundManager: " +
-                "Next-round countdown cancelled."
-            );
         }
     }
 }

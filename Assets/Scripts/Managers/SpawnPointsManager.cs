@@ -6,10 +6,14 @@ public class SpawnPointsManager : MonoBehaviour
 {
     public static SpawnPointsManager Instance { get; private set; }
 
-    [Header("Spawn Points")]
+    [Header("Runner Spawn Points")]
     [SerializeField] private Transform[] spawnPoints;
 
-    // Keeps each connected player assigned to a specific spawn point.
+    [Header("Trapper Spawn Point")]
+    [SerializeField] private Transform trapperSpawnPoint;
+
+    // Keeps each connected player assigned
+    // to a specific Runner spawn point.
     private readonly Dictionary<ulong, int> playerSpawnAssignments =
         new Dictionary<ulong, int>();
 
@@ -23,7 +27,6 @@ public class SpawnPointsManager : MonoBehaviour
 
         Instance = this;
 
-        // Automatically find spawn points if none were assigned.
         if (spawnPoints == null || spawnPoints.Length == 0)
         {
             FindSpawnPoints();
@@ -59,19 +62,14 @@ public class SpawnPointsManager : MonoBehaviour
         GameObject[] objects =
             GameObject.FindGameObjectsWithTag("Respawn");
 
-        List<Transform> points = new List<Transform>();
+        List<Transform> points =
+            new List<Transform>();
 
         foreach (GameObject obj in objects)
         {
             points.Add(obj.transform);
         }
 
-        // Sort by name so:
-        // SpawnPoint_1
-        // SpawnPoint_2
-        // SpawnPoint_3
-        // SpawnPoint_4
-        // are always in the expected order.
         points.Sort((a, b) =>
             string.Compare(
                 a.name,
@@ -101,44 +99,49 @@ public class SpawnPointsManager : MonoBehaviour
             playerSpawnAssignments.Remove(clientId);
 
             Debug.Log(
-                $"SpawnPointsManager: Released spawn point for Client {clientId}."
+                $"SpawnPointsManager: Released spawn point " +
+                $"for Client {clientId}."
             );
         }
     }
 
     private void AssignSpawnPoint(ulong clientId)
     {
-        if (spawnPoints == null || spawnPoints.Length == 0)
+        if (spawnPoints == null ||
+            spawnPoints.Length == 0)
         {
             Debug.LogError(
-                "SpawnPointsManager: No spawn points available!"
+                "SpawnPointsManager: No Runner spawn points available!"
             );
 
             return;
         }
 
-        // Already assigned?
         if (playerSpawnAssignments.ContainsKey(clientId))
             return;
 
-        int spawnIndex = FindAvailableSpawnPoint();
+        int spawnIndex =
+            FindAvailableSpawnPoint();
 
-        playerSpawnAssignments.Add(clientId, spawnIndex);
+        playerSpawnAssignments.Add(
+            clientId,
+            spawnIndex
+        );
 
         Debug.Log(
             $"SpawnPointsManager: Client {clientId} assigned to " +
-            $"SpawnPoint_{spawnIndex + 1}."
+            $"{spawnPoints[spawnIndex].name}."
         );
     }
 
     private int FindAvailableSpawnPoint()
     {
-        // Find the first spawn point that isn't currently assigned.
         for (int i = 0; i < spawnPoints.Length; i++)
         {
             bool alreadyUsed = false;
 
-            foreach (int assignedIndex in playerSpawnAssignments.Values)
+            foreach (int assignedIndex
+                     in playerSpawnAssignments.Values)
             {
                 if (assignedIndex == i)
                 {
@@ -151,15 +154,20 @@ public class SpawnPointsManager : MonoBehaviour
                 return i;
         }
 
-        // If there are more players than spawn points,
-        // reuse the first point.
         return 0;
     }
 
+    // =========================================================
+    // RUNNER SPAWN
+    // =========================================================
+
     public Transform GetSpawnPoint(ulong clientId)
     {
-        if (!NetworkManager.Singleton.IsServer)
+        if (NetworkManager.Singleton == null ||
+            !NetworkManager.Singleton.IsServer)
+        {
             return null;
+        }
 
         if (!playerSpawnAssignments.ContainsKey(clientId))
         {
@@ -169,12 +177,34 @@ public class SpawnPointsManager : MonoBehaviour
         int spawnIndex =
             playerSpawnAssignments[clientId];
 
+        if (spawnIndex < 0 ||
+            spawnIndex >= spawnPoints.Length)
+        {
+            return null;
+        }
+
         return spawnPoints[spawnIndex];
+    }
+
+    // =========================================================
+    // TRAPPER SPAWN
+    // =========================================================
+
+    public Transform GetTrapperSpawnPoint()
+    {
+        if (NetworkManager.Singleton == null ||
+            !NetworkManager.Singleton.IsServer)
+        {
+            return null;
+        }
+
+        return trapperSpawnPoint;
     }
 
     public Vector3 GetSpawnPosition(ulong clientId)
     {
-        Transform spawnPoint = GetSpawnPoint(clientId);
+        Transform spawnPoint =
+            GetSpawnPoint(clientId);
 
         if (spawnPoint == null)
             return Vector3.zero;
@@ -184,11 +214,28 @@ public class SpawnPointsManager : MonoBehaviour
 
     public Quaternion GetSpawnRotation(ulong clientId)
     {
-        Transform spawnPoint = GetSpawnPoint(clientId);
+        Transform spawnPoint =
+            GetSpawnPoint(clientId);
 
         if (spawnPoint == null)
             return Quaternion.identity;
 
         return spawnPoint.rotation;
+    }
+
+    public Vector3 GetTrapperSpawnPosition()
+    {
+        if (trapperSpawnPoint == null)
+            return Vector3.zero;
+
+        return trapperSpawnPoint.position;
+    }
+
+    public Quaternion GetTrapperSpawnRotation()
+    {
+        if (trapperSpawnPoint == null)
+            return Quaternion.identity;
+
+        return trapperSpawnPoint.rotation;
     }
 }

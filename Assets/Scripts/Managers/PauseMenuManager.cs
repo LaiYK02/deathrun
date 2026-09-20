@@ -206,12 +206,6 @@ public class PauseMenuManager : MonoBehaviour
 
     private void TryFindLocalPlayer()
     {
-        if (localPlayerMovement != null)
-        {
-            CancelInvoke(nameof(TryFindLocalPlayer));
-            return;
-        }
-
         if (NetworkManager.Singleton == null)
             return;
 
@@ -226,19 +220,23 @@ public class PauseMenuManager : MonoBehaviour
         if (player == null)
             return;
 
-        localPlayerMovement =
+        PlayerMovement newMovement =
             player.GetComponent<PlayerMovement>();
 
-        localPlayerLook =
+        PlayerLookManager newLook =
             player.GetComponent<PlayerLookManager>();
 
-        if (localPlayerMovement != null)
-        {
-            Debug.Log(
-                "PauseMenuManager: Local player found."
-            );
+        if (newMovement == null)
+            return;
 
-            CancelInvoke(nameof(TryFindLocalPlayer));
+        if (localPlayerMovement != newMovement)
+        {
+            localPlayerMovement = newMovement;
+            localPlayerLook = newLook;
+
+            Debug.Log(
+                "PauseMenuManager: Local player reference updated."
+            );
         }
     }
 

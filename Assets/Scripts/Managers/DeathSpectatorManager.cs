@@ -29,15 +29,6 @@ public class DeathSpectatorManager : MonoBehaviour
 
     private void TryFindLocalPlayer()
     {
-        if (localPlayer != null)
-        {
-            CancelInvoke(
-                nameof(TryFindLocalPlayer)
-            );
-
-            return;
-        }
-
         if (Unity.Netcode.NetworkManager.Singleton == null)
             return;
 
@@ -52,15 +43,21 @@ public class DeathSpectatorManager : MonoBehaviour
         if (playerObject == null)
             return;
 
-        localPlayer =
-            playerObject.GetComponent<
-                RespawnManager
-            >();
+        RespawnManager newLocalPlayer =
+            playerObject.GetComponent<RespawnManager>();
 
-        if (localPlayer != null)
+        if (newLocalPlayer == null)
+            return;
+
+        if (localPlayer != newLocalPlayer)
         {
-            CancelInvoke(
-                nameof(TryFindLocalPlayer)
+            localPlayer = newLocalPlayer;
+
+            spectatorActive = false;
+            currentTarget = null;
+
+            Debug.Log(
+                "DeathSpectatorManager: Local player reference updated."
             );
         }
     }

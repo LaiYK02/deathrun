@@ -158,9 +158,6 @@ public class CameraManager : MonoBehaviour
 
     private void TryBindToLocalPlayer()
     {
-        if (camerasBound)
-            return;
-
         if (NetworkManager.Singleton == null)
             return;
 
@@ -175,14 +172,24 @@ public class CameraManager : MonoBehaviour
         if (localPlayerObject == null)
             return;
 
+        // Already bound to the current player.
+        if (localPlayer ==
+            localPlayerObject.transform)
+        {
+            return;
+        }
+
+        // PlayerObject changed.
+        // Rebind the cameras.
         BindCamerasToPlayer(
             localPlayerObject.transform
         );
 
         camerasBound = true;
 
-        CancelInvoke(
-            nameof(TryBindToLocalPlayer)
+        Debug.Log(
+            $"CameraManager: Rebound cameras to " +
+            $"{localPlayerObject.name}."
         );
     }
 

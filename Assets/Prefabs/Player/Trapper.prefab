@@ -50,6 +50,7 @@ GameObject:
   - component: {fileID: 2161879075150325870}
   - component: {fileID: 5596814424695100625}
   - component: {fileID: 8353487361365730932}
+  - component: {fileID: -5351888606282409270}
   m_Layer: 0
   m_Name: Trapper
   m_TagString: Untagged
@@ -86,7 +87,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3097320386
+  GlobalObjectIdHash: 3469726524
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -247,9 +248,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RespawnManager
   ShowTopMostFoldoutHeaderGroup: 1
   playerModel: {fileID: 7620667682803858414}
-  deathAudioSource: {fileID: 7020127930965676385, guid: 5f804552df156e64b82411d82563f460, type: 3}
+  deathAudioSource: {fileID: 5596814424695100625}
   normalDeathSound: {fileID: 8300000, guid: f8de13ed5cc1b774ca0ea94a5b468c91, type: 3}
   funnyDeathSound: {fileID: 8300000, guid: 143764a72e9ca574c8fa4d6327c0b0aa, type: 3}
+  warmupRespawnDelay: 3
   gameSceneName: GameScene
   IsDead:
     UpdateTraits:
@@ -455,6 +457,25 @@ MonoBehaviour:
   maximumDistance: 40
   minimumScale: 0.5
   maximumScale: 1
+--- !u!114 &-5351888606282409270
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4950740309503940072}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 729f65637ab462f49bb594db994357cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerRoleManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  defaultRole: 0
+  Role:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!1 &5785164690862011598
 GameObject:
   m_ObjectHideFlags: 0

@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 4973080850514381883}
   - component: {fileID: 7020127930965676385}
   - component: {fileID: 2457810258578477800}
+  - component: {fileID: -4841991844255919063}
   m_Layer: 0
   m_Name: Runner
   m_TagString: Untagged
@@ -420,6 +421,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNameTag
   headAnchor: {fileID: 2391651860054417234}
+  minimumDistance: 5
+  maximumDistance: 40
+  minimumScale: 0.5
+  maximumScale: 1
+--- !u!114 &-4841991844255919063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1449159570299268476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 729f65637ab462f49bb594db994357cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerRoleManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  defaultRole: 0
+  Role:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!1 &5921009028045001493
 GameObject:
   m_ObjectHideFlags: 0

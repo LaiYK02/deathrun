@@ -14,6 +14,9 @@ public class RespawnManager : NetworkBehaviour
     [SerializeField] private AudioClip normalDeathSound;
     [SerializeField] private AudioClip funnyDeathSound;
 
+    [Header("Warmup Respawn")]
+    [SerializeField] private float warmupRespawnDelay = 3f;
+
     [Header("Gameplay Scene")]
     [SerializeField] private string gameSceneName = "GameScene";
 
@@ -49,7 +52,10 @@ public class RespawnManager : NetworkBehaviour
     private bool gameplayInitialized;
     private bool deathRequested;
 
+    private bool warmupDeathTriggered;
+
     private Coroutine initializeCoroutine;
+    private Coroutine warmupRespawnCoroutine;
 
     // =========================================================
     // AWAKE
@@ -114,6 +120,12 @@ public class RespawnManager : NetworkBehaviour
         {
             StopCoroutine(initializeCoroutine);
             initializeCoroutine = null;
+        }
+
+        if (warmupRespawnCoroutine != null)
+        {
+            StopCoroutine(warmupRespawnCoroutine);
+            warmupRespawnCoroutine = null;
         }
 
         base.OnNetworkDespawn();
@@ -267,6 +279,41 @@ public class RespawnManager : NetworkBehaviour
         if (!hit.collider.CompareTag("Deadline"))
             return;
 
+        if (RoundManager.Instance == null)
+            return;
+
+        // -----------------------------------------------------
+        // WARMUP
+        // -----------------------------------------------------
+
+        if (RoundManager.Instance.Phase.Value ==
+            RoundPhase.Warmup)
+        {
+            if (warmupDeathTriggered)
+                return;
+
+            StartWarmupDeath();
+
+            return;
+        }
+
+        // -----------------------------------------------------
+        // ROUND ENDING
+        // -----------------------------------------------------
+
+        if (RoundManager.Instance.Phase.Value ==
+            RoundPhase.Ending)
+        {
+            return;
+        }
+
+        // -----------------------------------------------------
+        // ACTIVE ROUND
+        // -----------------------------------------------------
+
+        if (!RoundManager.Instance.IsRoundActive)
+            return;
+
         if (IsDead.Value ||
             deathRequested ||
             DeathTriggeredLocally)
@@ -280,6 +327,112 @@ public class RespawnManager : NetworkBehaviour
         EnterLocalDeathState();
 
         RequestDeathServerRpc();
+    }
+
+    // =========================================================
+    // WARMUP DEATH
+    // =========================================================
+
+    private void StartWarmupDeath()
+    {
+        if (warmupDeathTriggered)
+            return;
+
+        warmupDeathTriggered = true;
+
+        Debug.Log(
+            $"Player {OwnerClientId} died during Warmup. " +
+            $"Respawning in {warmupRespawnDelay} seconds."
+        );
+
+        // Stop local movement/look and play death animation.
+        EnterLocalDeathState();
+
+        // Tell the server that this is only a temporary
+        // Warmup death. It must NOT mark IsDead.
+        RequestWarmupDeathServerRpc();
+    }
+
+    // =========================================================
+    // REQUEST WARMUP DEATH
+    // =========================================================
+
+    [ServerRpc]
+    private void RequestWarmupDeathServerRpc()
+    {
+        if (RoundManager.Instance == null)
+            return;
+
+        if (RoundManager.Instance.Phase.Value !=
+            RoundPhase.Warmup)
+        {
+            return;
+        }
+
+        // Play death sound for everyone.
+        PlayDeathSoundClientRpc();
+
+        // Tell the owner to respawn after 3 seconds.
+        StartWarmupRespawnClientRpc(
+            warmupRespawnDelay
+        );
+    }
+
+    // =========================================================
+    // WARMUP RESPAWN
+    // =========================================================
+
+    [ClientRpc]
+    private void StartWarmupRespawnClientRpc(
+        float delay)
+    {
+        if (!IsOwner)
+            return;
+
+        if (warmupRespawnCoroutine != null)
+        {
+            StopCoroutine(
+                warmupRespawnCoroutine
+            );
+        }
+
+        warmupRespawnCoroutine =
+            StartCoroutine(
+                WarmupRespawnCoroutine(delay)
+            );
+    }
+
+    private IEnumerator WarmupRespawnCoroutine(
+        float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        warmupRespawnCoroutine = null;
+
+        // If the round has already moved into another phase,
+        // don't perform a warmup respawn.
+        if (RoundManager.Instance == null)
+        {
+            yield break;
+        }
+
+        if (RoundManager.Instance.Phase.Value !=
+            RoundPhase.Warmup)
+        {
+            yield break;
+        }
+
+        PerformLocalSpawn(
+            spawnPosition,
+            spawnRotation
+        );
+
+        warmupDeathTriggered = false;
+
+        Debug.Log(
+            $"Player {OwnerClientId} respawned after " +
+            $"Warmup death."
+        );
     }
 
     // =========================================================
@@ -348,12 +501,19 @@ public class RespawnManager : NetworkBehaviour
     }
 
     // =========================================================
-    // REQUEST DEATH
+    // REQUEST NORMAL DEATH
     // =========================================================
 
     [ServerRpc]
     private void RequestDeathServerRpc()
     {
+        if (RoundManager.Instance == null ||
+            !RoundManager.Instance.IsRoundActive)
+        {
+            deathRequested = false;
+            return;
+        }
+
         if (!gameplayInitialized)
         {
             deathRequested = false;
@@ -497,6 +657,7 @@ public class RespawnManager : NetworkBehaviour
 
         DeathTriggeredLocally = false;
         deathRequested = false;
+        warmupDeathTriggered = false;
 
         // -----------------------------------------------------
         // DISABLE CHARACTER CONTROLLER DURING TELEPORT
@@ -526,7 +687,8 @@ public class RespawnManager : NetworkBehaviour
         // RESET MOVEMENT
         // -----------------------------------------------------
 
-        PlayerMovement playerMovement = GetComponent<PlayerMovement>();
+        PlayerMovement playerMovement =
+            GetComponent<PlayerMovement>();
 
         if (playerMovement != null)
         {
@@ -536,14 +698,17 @@ public class RespawnManager : NetworkBehaviour
                 PauseMenuManager.Instance != null &&
                 PauseMenuManager.Instance.IsPaused;
 
-            playerMovement.SetMovementControlEnabled(!pauseIsOpen);
+            playerMovement.SetMovementControlEnabled(
+                !pauseIsOpen
+            );
         }
 
         // -----------------------------------------------------
         // RESET LOOK
         // -----------------------------------------------------
 
-        PlayerLookManager playerLook = GetComponent<PlayerLookManager>();
+        PlayerLookManager playerLook =
+            GetComponent<PlayerLookManager>();
 
         if (playerLook != null)
         {
@@ -553,7 +718,8 @@ public class RespawnManager : NetworkBehaviour
                 PauseMenuManager.Instance != null &&
                 PauseMenuManager.Instance.IsPaused;
 
-            playerLook.enabled = !pauseIsOpen;
+            playerLook.enabled =
+                !pauseIsOpen;
         }
 
         // -----------------------------------------------------
@@ -604,7 +770,7 @@ public class RespawnManager : NetworkBehaviour
 
         Debug.Log(
             $"Player {OwnerClientId} " +
-            $"reset for new round at {position}."
+            $"reset at {position}."
         );
     }
 
