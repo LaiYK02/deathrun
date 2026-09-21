@@ -36,4 +36,21 @@ public class PlayerRoleManager : NetworkBehaviour
             Role.Value = defaultRole;
         }
     }
+
+    // =========================================================
+    // SERVER ROLE ASSIGNMENT
+    // =========================================================
+
+    public void SetRoleServer(PlayerRole newRole)
+    {
+        if (!IsServer)
+            return;
+
+        Role.Value = newRole;
+
+        Debug.Log(
+            $"PlayerRoleManager: Client {OwnerClientId} " +
+            $"role changed to {newRole}."
+        );
+    }
 }

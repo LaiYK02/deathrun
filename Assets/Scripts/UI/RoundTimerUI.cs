@@ -11,38 +11,30 @@ public class RoundTimerUI : MonoBehaviour
         if (RoundManager.Instance == null)
         {
             if (timerText != null)
-                timerText.text = "";
+                timerText.text = "00:00";
 
             return;
         }
 
-        RoundPhase phase =
-            RoundManager.Instance.Phase.Value;
-
         int timeRemaining =
             RoundManager.Instance.PhaseTimeRemaining.Value;
 
-        switch (phase)
+        timeRemaining =
+            Mathf.Max(
+                0,
+                timeRemaining
+            );
+
+        int minutes =
+            timeRemaining / 60;
+
+        int seconds =
+            timeRemaining % 60;
+
+        if (timerText != null)
         {
-            case RoundPhase.Warmup:
-
-                timerText.text = timeRemaining.ToString();
-
-                break;
-
-            case RoundPhase.Active:
-
-                timerText.text =
-                    "ROUND " +
-                    RoundManager.Instance.CurrentRound.Value;
-
-                break;
-
-            case RoundPhase.Ending:
-
-                timerText.text = timeRemaining.ToString();
-
-                break;
+            timerText.text =
+                $"{minutes:00}:{seconds:00}";
         }
     }
 }

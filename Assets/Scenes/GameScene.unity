@@ -6489,7 +6489,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 0
+  m_text: 00:00
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: b40cfe872d7646a4b84c601b2131d859, type: 2}
   m_sharedMaterial: {fileID: -5684159278525265069, guid: b40cfe872d7646a4b84c601b2131d859, type: 2}
@@ -9837,6 +9837,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   warmupDuration: 30
   trapperSelectionTime: 5
+  roundDuration: 25
   nextRoundDelay: 5
   runnerPrefab: {fileID: 1449159570299268476, guid: 5f804552df156e64b82411d82563f460, type: 3}
   trapperPrefab: {fileID: 4950740309503940072, guid: 8d6a25bfcf04d4b4a93fcb5b1475398d, type: 3}
@@ -11987,7 +11988,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
   m_AnchoredPosition: {x: 0, y: 415}
-  m_SizeDelta: {x: 150, y: 75}
+  m_SizeDelta: {x: 210, y: 75}
   m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &1764504171
 MonoBehaviour:
@@ -12002,8 +12003,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundTimerUI
   timerText: {fileID: 956526306}
-  warmupPrefix: 'WARM UP: '
-  endingPrefix: 'NEXT ROUND: '
 --- !u!114 &1764504172
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12017,7 +12016,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0.2650854, b: 0.4566037, a: 1}
+  m_Color: {r: 0, g: 0, b: 0, a: 0.8}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

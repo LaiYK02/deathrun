@@ -620,6 +620,23 @@ public class RespawnManager : NetworkBehaviour
 
         IsDead.Value = false;
 
+        // Set the server-side position immediately.
+        CharacterController controller =
+            GetComponent<CharacterController>();
+
+        if (controller != null)
+            controller.enabled = false;
+
+        transform.SetPositionAndRotation(
+            position,
+            rotation
+        );
+
+        if (controller != null)
+            controller.enabled = true;
+
+        // Tell the owning client to perform its
+        // local movement/camera/animation reset.
         ResetForNewRoundClientRpc(
             position,
             rotation

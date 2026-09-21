@@ -18,15 +18,19 @@ public class RoundManager : NetworkBehaviour
 
     [Header("Warmup")]
     [SerializeField] private float warmupDuration = 30f;
-
     [SerializeField] private float trapperSelectionTime = 5f;
 
     [Header("Round")]
+    [SerializeField] private float roundDuration = 300f;
     [SerializeField] private float nextRoundDelay = 5f;
 
     [Header("Player Prefabs")]
     [SerializeField] private GameObject runnerPrefab;
     [SerializeField] private GameObject trapperPrefab;
+
+    // =========================================================
+    // NETWORK VARIABLES
+    // =========================================================
 
     public NetworkVariable<int> CurrentRound =
         new NetworkVariable<int>(
@@ -59,12 +63,17 @@ public class RoundManager : NetworkBehaviour
     public bool IsRoundActive =>
         Phase.Value == RoundPhase.Active;
 
+    // =========================================================
+    // PRIVATE STATE
+    // =========================================================
+
     private readonly HashSet<ulong> deadPlayers =
         new HashSet<ulong>();
 
     private Coroutine roundFlowCoroutine;
 
     private bool roundEndingBecauseTrapperDied;
+    private bool roundEndingBecauseTimeExpired;
 
     // =========================================================
     // AWAKE
@@ -132,9 +141,13 @@ public class RoundManager : NetworkBehaviour
 
     private IEnumerator StartGameFlow()
     {
-        Phase.Value = RoundPhase.Warmup;
+        Phase.Value =
+            RoundPhase.Warmup;
+
         PhaseTimeRemaining.Value =
-            Mathf.CeilToInt(warmupDuration);
+            Mathf.CeilToInt(
+                warmupDuration
+            );
 
         TrapperClientId.Value =
             NoTrapper;
@@ -154,7 +167,8 @@ public class RoundManager : NetworkBehaviour
         SetAllPlayersAsRunners();
 
         Debug.Log(
-            $"RoundManager: {warmupDuration} second warmup started."
+            $"RoundManager: " +
+            $"{warmupDuration} second warmup started."
         );
 
         yield return StartCoroutine(
@@ -205,7 +219,8 @@ public class RoundManager : NetworkBehaviour
                 trapperSelected = true;
             }
 
-            elapsed += Time.deltaTime;
+            elapsed +=
+                Time.deltaTime;
 
             yield return null;
         }
@@ -276,11 +291,80 @@ public class RoundManager : NetworkBehaviour
         Phase.Value =
             RoundPhase.Active;
 
-        PhaseTimeRemaining.Value = 0;
+        // Start every round at exactly 5 minutes.
+        PhaseTimeRemaining.Value =
+            Mathf.CeilToInt(
+                roundDuration
+            );
 
         Debug.Log(
             $"RoundManager: Round " +
-            $"{CurrentRound.Value} is now ACTIVE."
+            $"{CurrentRound.Value} is now ACTIVE. " +
+            $"Time limit = {roundDuration} seconds."
+        );
+
+        // Start the 5-minute round timer.
+        roundFlowCoroutine =
+            StartCoroutine(
+                ActiveRoundCountdown()
+            );
+    }
+
+    // =========================================================
+    // ACTIVE ROUND COUNTDOWN
+    // =========================================================
+
+    private IEnumerator ActiveRoundCountdown()
+    {
+        float elapsed = 0f;
+
+        int lastDisplayedSecond = -1;
+
+        while (elapsed < roundDuration)
+        {
+            // If something else already ended the round,
+            // stop this countdown.
+            if (Phase.Value != RoundPhase.Active)
+            {
+                yield break;
+            }
+
+            int remaining =
+                Mathf.CeilToInt(
+                    roundDuration - elapsed
+                );
+
+            if (remaining != lastDisplayedSecond)
+            {
+                PhaseTimeRemaining.Value =
+                    Mathf.Max(
+                        0,
+                        remaining
+                    );
+
+                lastDisplayedSecond =
+                    remaining;
+            }
+
+            elapsed +=
+                Time.deltaTime;
+
+            yield return null;
+        }
+
+        // Make sure the UI reaches exactly 00:00.
+        PhaseTimeRemaining.Value = 0;
+
+        // Time has expired.
+        Debug.Log(
+            "RoundManager: " +
+            "Round time limit reached. " +
+            "Trapper wins."
+        );
+
+        StartRoundEnding(
+            false,
+            true
         );
     }
 
@@ -396,7 +480,11 @@ public class RoundManager : NetworkBehaviour
 
         if (playerWasTrapper)
         {
-            StartRoundEnding(true);
+            StartRoundEnding(
+                true,
+                false
+            );
+
             return;
         }
 
@@ -406,7 +494,10 @@ public class RoundManager : NetworkBehaviour
 
         if (AreAllRunnersDead())
         {
-            StartRoundEnding(false);
+            StartRoundEnding(
+                false,
+                false
+            );
         }
     }
 
@@ -460,13 +551,20 @@ public class RoundManager : NetworkBehaviour
     // =========================================================
 
     private void StartRoundEnding(
-        bool trapperDied)
+        bool trapperDied,
+        bool timeExpired)
     {
+        if (!IsServer)
+            return;
+
         if (Phase.Value == RoundPhase.Ending)
             return;
 
         roundEndingBecauseTrapperDied =
             trapperDied;
+
+        roundEndingBecauseTimeExpired =
+            timeExpired;
 
         Phase.Value =
             RoundPhase.Ending;
@@ -476,10 +574,23 @@ public class RoundManager : NetworkBehaviour
                 nextRoundDelay
             );
 
-        string reason =
-            trapperDied
-                ? "Trapper died"
-                : "All runners died";
+        string reason;
+
+        if (timeExpired)
+        {
+            reason =
+                "Time limit reached - Trapper wins";
+        }
+        else if (trapperDied)
+        {
+            reason =
+                "Trapper died";
+        }
+        else
+        {
+            reason =
+                "All runners died";
+        }
 
         Debug.Log(
             "RoundManager: Round ending. " +
@@ -525,7 +636,8 @@ public class RoundManager : NetworkBehaviour
                     remaining;
             }
 
-            elapsed += Time.deltaTime;
+            elapsed +=
+                Time.deltaTime;
 
             yield return null;
         }
@@ -555,9 +667,28 @@ public class RoundManager : NetworkBehaviour
             $"{CurrentRound.Value}."
         );
 
-        // If the Trapper died,
-        // choose a new Trapper.
-        if (roundEndingBecauseTrapperDied)
+        // -----------------------------------------------------
+        // TIME LIMIT REACHED
+        // -----------------------------------------------------
+        //
+        // Trapper survived the entire 5 minutes.
+        // The old Trapper becomes a Runner.
+        // A random current Runner becomes the new Trapper.
+        // -----------------------------------------------------
+
+        if (roundEndingBecauseTimeExpired)
+        {
+            ChooseReplacementTrapper();
+
+            Debug.Log(
+                "RoundManager: Time limit reached. " +
+                "A random Runner will become the new Trapper."
+            );
+        }
+        // -----------------------------------------------------
+        // TRAPPER DIED
+        // -----------------------------------------------------
+        else if (roundEndingBecauseTrapperDied)
         {
             ChooseReplacementTrapper();
         }
@@ -565,17 +696,30 @@ public class RoundManager : NetworkBehaviour
         roundEndingBecauseTrapperDied =
             false;
 
+        roundEndingBecauseTimeExpired =
+            false;
+
         SpawnPlayersForCurrentRound();
 
         Phase.Value =
             RoundPhase.Active;
 
-        PhaseTimeRemaining.Value = 0;
+        PhaseTimeRemaining.Value =
+            Mathf.CeilToInt(
+                roundDuration
+            );
 
         Debug.Log(
             $"RoundManager: Round " +
-            $"{CurrentRound.Value} is ACTIVE."
+            $"{CurrentRound.Value} is ACTIVE. " +
+            $"Time limit = {roundDuration} seconds."
         );
+
+        // Start the next round timer.
+        roundFlowCoroutine =
+            StartCoroutine(
+                ActiveRoundCountdown()
+            );
     }
 
     // =========================================================
@@ -587,8 +731,10 @@ public class RoundManager : NetworkBehaviour
         ulong previousTrapper =
             TrapperClientId.Value;
 
-        // First turn the old Trapper back
-        // into a Runner.
+        // -----------------------------------------------------
+        // TURN OLD TRAPPER INTO RUNNER
+        // -----------------------------------------------------
+
         if (previousTrapper != NoTrapper &&
             NetworkManager.Singleton
                 .ConnectedClients
@@ -599,6 +745,10 @@ public class RoundManager : NetworkBehaviour
                 PlayerRole.Runner
             );
         }
+
+        // -----------------------------------------------------
+        // FIND CURRENT RUNNERS
+        // -----------------------------------------------------
 
         List<ulong> candidates =
             new List<ulong>();
@@ -613,17 +763,26 @@ public class RoundManager : NetworkBehaviour
             candidates.Add(clientId);
         }
 
+        // -----------------------------------------------------
+        // NO REPLACEMENT
+        // -----------------------------------------------------
+
         if (candidates.Count == 0)
         {
             TrapperClientId.Value =
                 NoTrapper;
 
             Debug.Log(
-                "RoundManager: No replacement Trapper available."
+                "RoundManager: " +
+                "No replacement Trapper available."
             );
 
             return;
         }
+
+        // -----------------------------------------------------
+        // RANDOM NEW TRAPPER
+        // -----------------------------------------------------
 
         ulong newTrapper =
             candidates[
@@ -689,18 +848,13 @@ public class RoundManager : NetworkBehaviour
         PlayerRoleManager currentRole =
             oldPlayer.GetComponent<PlayerRoleManager>();
 
+        // If already the correct role,
+        // don't replace the network object.
         if (currentRole != null &&
-            currentRole.Role.Value ==
-            desiredRole)
+            currentRole.Role.Value == desiredRole)
         {
             return true;
         }
-
-        Vector3 position =
-            oldPlayer.transform.position;
-
-        Quaternion rotation =
-            oldPlayer.transform.rotation;
 
         GameObject prefab =
             desiredRole == PlayerRole.Trapper
@@ -712,15 +866,21 @@ public class RoundManager : NetworkBehaviour
             $"to {desiredRole}."
         );
 
-        // Remove old player object.
+        // ---------------------------------------------------------
+        // DESTROY OLD PLAYER
+        // ---------------------------------------------------------
+
         oldPlayer.Despawn(true);
 
-        // Create new player object.
+        // ---------------------------------------------------------
+        // CREATE NEW PLAYER
+        // ---------------------------------------------------------
+
         GameObject newPlayer =
             Instantiate(
                 prefab,
-                position,
-                rotation
+                Vector3.zero,
+                Quaternion.identity
             );
 
         NetworkObject newNetworkObject =
@@ -734,19 +894,89 @@ public class RoundManager : NetworkBehaviour
             );
 
             Destroy(newPlayer);
+
             return false;
         }
 
-        // Make the new object the player's
-        // official NetworkObject.
+        // ---------------------------------------------------------
+        // SPAWN AS PLAYER OBJECT
+        // ---------------------------------------------------------
+
         newNetworkObject.SpawnAsPlayerObject(
             clientId,
             true
         );
 
+        // ---------------------------------------------------------
+        // EXPLICITLY ASSIGN ROLE
+        // ---------------------------------------------------------
+
+        PlayerRoleManager newRoleManager =
+            newPlayer.GetComponent<PlayerRoleManager>();
+
+        if (newRoleManager != null)
+        {
+            newRoleManager.SetRoleServer(
+                desiredRole
+            );
+        }
+        else
+        {
+            Debug.LogError(
+                $"RoundManager: {prefab.name} is missing " +
+                $"PlayerRoleManager."
+            );
+        }
+
+        // ---------------------------------------------------------
+        // MOVE TO CORRECT ROUND SPAWN
+        // ---------------------------------------------------------
+
+        Transform spawnPoint;
+
+        if (desiredRole == PlayerRole.Trapper)
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetTrapperSpawnPoint();
+        }
+        else
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetSpawnPoint(clientId);
+        }
+
+        if (spawnPoint != null)
+        {
+            RespawnManager respawnManager =
+                newPlayer.GetComponent<RespawnManager>();
+
+            if (respawnManager != null)
+            {
+                respawnManager.ResetForNewRound(
+                    spawnPoint.position,
+                    spawnPoint.rotation
+                );
+            }
+            else
+            {
+                newPlayer.transform.SetPositionAndRotation(
+                    spawnPoint.position,
+                    spawnPoint.rotation
+                );
+            }
+        }
+        else
+        {
+            Debug.LogError(
+                $"RoundManager: No spawn point found " +
+                $"for Client {clientId}."
+            );
+        }
+
         return true;
     }
-
     // =========================================================
     // SET EVERYONE TO RUNNER
     // =========================================================
@@ -823,7 +1053,11 @@ public class RoundManager : NetworkBehaviour
         if (Phase.Value == RoundPhase.Active &&
             clientId == TrapperClientId.Value)
         {
-            StartRoundEnding(true);
+            StartRoundEnding(
+                true,
+                false
+            );
+
             return;
         }
 
@@ -835,7 +1069,10 @@ public class RoundManager : NetworkBehaviour
         {
             if (AreAllRunnersDead())
             {
-                StartRoundEnding(false);
+                StartRoundEnding(
+                    false,
+                    false
+                );
             }
         }
     }

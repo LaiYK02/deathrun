@@ -62,10 +62,27 @@ public class PlayerNameTag : MonoBehaviour
                 OnPlayerNameChanged;
         }
 
+        // Destroy this player's UI name tag.
+        DestroyNameTag();
+
         if (NameTagManager.Instance != null)
         {
             NameTagManager.Instance.UnregisterPlayer(this);
         }
+    }
+
+    private void DestroyNameTag()
+    {
+        if (tagRect == null)
+            return;
+
+        if (tagRect.gameObject != null)
+        {
+            Destroy(tagRect.gameObject);
+        }
+
+        tagRect = null;
+        nameText = null;
     }
 
     private void OnPlayerNameChanged(
@@ -96,6 +113,14 @@ public class PlayerNameTag : MonoBehaviour
         RectTransform rect,
         TMP_Text text)
     {
+        // Safety: remove an old tag if this object
+        // somehow receives another UI assignment.
+        if (tagRect != null &&
+            tagRect != rect)
+        {
+            DestroyNameTag();
+        }
+
         tagRect = rect;
         nameText = text;
 
@@ -106,7 +131,6 @@ public class PlayerNameTag : MonoBehaviour
             );
         }
 
-        // Start at the maximum scale.
         if (tagRect != null)
         {
             tagRect.localScale =
@@ -122,7 +146,7 @@ public class PlayerNameTag : MonoBehaviour
             return false;
         }
 
-        // Never show the local player's own name.
+        // Never show local player's own name.
         if (NetworkManager.Singleton.LocalClient != null &&
             NetworkManager.Singleton.LocalClient.PlayerObject ==
             GetComponent<NetworkObject>())
@@ -137,7 +161,7 @@ public class PlayerNameTag : MonoBehaviour
             return false;
         }
 
-        // Hide all player names while pause/settings is open.
+        // Hide all names while pause/settings is open.
         if (PauseMenuManager.Instance != null &&
             (PauseMenuManager.Instance.IsPaused ||
              PauseMenuManager.Instance.IsSettingsOpen))
@@ -173,7 +197,6 @@ public class PlayerNameTag : MonoBehaviour
         Vector3 worldPosition =
             target.position;
 
-        // Slightly above the assigned head anchor.
         worldPosition +=
             Vector3.up * 0.08f;
 
@@ -182,7 +205,6 @@ public class PlayerNameTag : MonoBehaviour
                 worldPosition
             );
 
-        // Behind the camera.
         if (screenPosition.z <= 0f)
         {
             tagRect.gameObject.SetActive(false);
@@ -190,10 +212,6 @@ public class PlayerNameTag : MonoBehaviour
         }
 
         tagRect.gameObject.SetActive(true);
-
-        // --------------------------------------------------
-        // DISTANCE-BASED SCALE
-        // --------------------------------------------------
 
         float distance =
             Vector3.Distance(
@@ -208,9 +226,6 @@ public class PlayerNameTag : MonoBehaviour
                 distance
             );
 
-        // Inverse because:
-        // Close = maximum scale
-        // Far   = minimum scale
         float currentScale =
             Mathf.Lerp(
                 maximumScale,
@@ -220,10 +235,6 @@ public class PlayerNameTag : MonoBehaviour
 
         tagRect.localScale =
             Vector3.one * currentScale;
-
-        // --------------------------------------------------
-        // SCREEN POSITION
-        // --------------------------------------------------
 
         RectTransformUtility
             .ScreenPointToLocalPointInRectangle(
