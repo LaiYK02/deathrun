@@ -377,7 +377,7 @@ public class CameraManager : MonoBehaviour
     // RESET FOR NEW ROUND
     // =========================================================
 
-    public void ResetForNewRound(
+    public void ResetPlayerAtPosition(
         Transform player,
         Quaternion playerRotation)
     {

@@ -251,7 +251,6 @@ MonoBehaviour:
   deathAudioSource: {fileID: 5596814424695100625}
   normalDeathSound: {fileID: 8300000, guid: f8de13ed5cc1b774ca0ea94a5b468c91, type: 3}
   funnyDeathSound: {fileID: 8300000, guid: 143764a72e9ca574c8fa4d6327c0b0aa, type: 3}
-  warmupRespawnDelay: 3
   gameSceneName: GameScene
   IsDead:
     UpdateTraits:
@@ -470,12 +469,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRoleManager
   ShowTopMostFoldoutHeaderGroup: 1
-  defaultRole: 0
+  defaultRole: 1
   Role:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
-    m_InternalValue: 0
+    m_InternalValue: 1
 --- !u!1 &5785164690862011598
 GameObject:
   m_ObjectHideFlags: 0

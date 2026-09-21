@@ -14,9 +14,6 @@ public class RespawnManager : NetworkBehaviour
     [SerializeField] private AudioClip normalDeathSound;
     [SerializeField] private AudioClip funnyDeathSound;
 
-    [Header("Warmup Respawn")]
-    [SerializeField] private float warmupRespawnDelay = 3f;
-
     [Header("Gameplay Scene")]
     [SerializeField] private string gameSceneName = "GameScene";
 
@@ -51,11 +48,9 @@ public class RespawnManager : NetworkBehaviour
 
     private bool gameplayInitialized;
     private bool deathRequested;
-
-    private bool warmupDeathTriggered;
+    private bool warmupTeleportRequested;
 
     private Coroutine initializeCoroutine;
-    private Coroutine warmupRespawnCoroutine;
 
     // =========================================================
     // AWAKE
@@ -120,12 +115,6 @@ public class RespawnManager : NetworkBehaviour
         {
             StopCoroutine(initializeCoroutine);
             initializeCoroutine = null;
-        }
-
-        if (warmupRespawnCoroutine != null)
-        {
-            StopCoroutine(warmupRespawnCoroutine);
-            warmupRespawnCoroutine = null;
         }
 
         base.OnNetworkDespawn();
@@ -206,31 +195,53 @@ public class RespawnManager : NetworkBehaviour
             return;
         }
 
-        Transform spawnPoint =
-            SpawnPointsManager.Instance.GetSpawnPoint(
-                OwnerClientId
-            );
+        PlayerRoleManager roleManager =
+            GetComponent<PlayerRoleManager>();
+
+        Transform spawnPoint = null;
+
+        // ---------------------------------------------------------
+        // TRAPPER
+        // ---------------------------------------------------------
+
+        if (roleManager != null &&
+            roleManager.IsTrapper)
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetTrapperSpawnPoint();
+        }
+
+        // ---------------------------------------------------------
+        // RUNNER
+        // ---------------------------------------------------------
+
+        else
+        {
+            spawnPoint = SpawnPointsManager.Instance.GetSpawnPoint(OwnerClientId);
+        }
 
         if (spawnPoint == null)
         {
             Debug.LogError(
-                $"RespawnManager: " +
-                $"Could not find spawn point for " +
-                $"Client {OwnerClientId}."
+                $"RespawnManager: Could not find " +
+                $"spawn point for Client {OwnerClientId}. " +
+                $"Role = " +
+                $"{(roleManager != null && roleManager.IsTrapper ? "Trapper" : "Runner")}."
             );
 
             return;
         }
 
-        spawnPosition =
-            spawnPoint.position;
+        spawnPosition = spawnPoint.position;
 
-        spawnRotation =
-            spawnPoint.rotation;
+        spawnRotation = spawnPoint.rotation;
 
         Debug.Log(
-            $"Player {OwnerClientId} assigned to " +
-            $"{spawnPoint.name}."
+            $"RespawnManager: Client {OwnerClientId} " +
+            $"assigned to {spawnPoint.name}. " +
+            $"Role = " +
+            $"{(roleManager != null && roleManager.IsTrapper ? "Trapper" : "Runner")}."
         );
     }
 
@@ -289,10 +300,12 @@ public class RespawnManager : NetworkBehaviour
         if (RoundManager.Instance.Phase.Value ==
             RoundPhase.Warmup)
         {
-            if (warmupDeathTriggered)
+            if (warmupTeleportRequested)
                 return;
 
-            StartWarmupDeath();
+            warmupTeleportRequested = true;
+
+            RequestWarmupTeleportServerRpc();
 
             return;
         }
@@ -329,109 +342,81 @@ public class RespawnManager : NetworkBehaviour
         RequestDeathServerRpc();
     }
 
-    // =========================================================
-    // WARMUP DEATH
-    // =========================================================
-
-    private void StartWarmupDeath()
-    {
-        if (warmupDeathTriggered)
-            return;
-
-        warmupDeathTriggered = true;
-
-        Debug.Log(
-            $"Player {OwnerClientId} died during Warmup. " +
-            $"Respawning in {warmupRespawnDelay} seconds."
-        );
-
-        // Stop local movement/look and play death animation.
-        EnterLocalDeathState();
-
-        // Tell the server that this is only a temporary
-        // Warmup death. It must NOT mark IsDead.
-        RequestWarmupDeathServerRpc();
-    }
-
-    // =========================================================
-    // REQUEST WARMUP DEATH
-    // =========================================================
-
     [ServerRpc]
-    private void RequestWarmupDeathServerRpc()
+    private void RequestWarmupTeleportServerRpc()
     {
         if (RoundManager.Instance == null)
+        {
+            warmupTeleportRequested = false;
             return;
+        }
 
+        // Only allow this during Warmup.
         if (RoundManager.Instance.Phase.Value !=
             RoundPhase.Warmup)
         {
+            warmupTeleportRequested = false;
             return;
         }
 
-        // Play death sound for everyone.
-        PlayDeathSoundClientRpc();
+        if (SpawnPointsManager.Instance == null)
+        {
+            Debug.LogError(
+                "RespawnManager: SpawnPointsManager not found " +
+                "during Warmup teleport."
+            );
 
-        // Tell the owner to respawn after 3 seconds.
-        StartWarmupRespawnClientRpc(
-            warmupRespawnDelay
-        );
-    }
-
-    // =========================================================
-    // WARMUP RESPAWN
-    // =========================================================
-
-    [ClientRpc]
-    private void StartWarmupRespawnClientRpc(
-        float delay)
-    {
-        if (!IsOwner)
+            warmupTeleportRequested = false;
             return;
+        }
 
-        if (warmupRespawnCoroutine != null)
+        // ---------------------------------------------------------
+        // DETERMINE PLAYER ROLE
+        // ---------------------------------------------------------
+
+        PlayerRoleManager roleManager =
+            GetComponent<PlayerRoleManager>();
+
+        Transform spawnPoint = null;
+
+        if (roleManager != null &&
+            roleManager.IsTrapper)
         {
-            StopCoroutine(
-                warmupRespawnCoroutine
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetTrapperSpawnPoint();
+        }
+        else
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetSpawnPoint(OwnerClientId);
+        }
+
+        if (spawnPoint == null)
+        {
+            Debug.LogError(
+                $"RespawnManager: Could not find Warmup " +
+                $"spawn point for Client {OwnerClientId}."
             );
+
+            warmupTeleportRequested = false;
+            return;
         }
-
-        warmupRespawnCoroutine =
-            StartCoroutine(
-                WarmupRespawnCoroutine(delay)
-            );
-    }
-
-    private IEnumerator WarmupRespawnCoroutine(
-        float delay)
-    {
-        yield return new WaitForSeconds(delay);
-
-        warmupRespawnCoroutine = null;
-
-        // If the round has already moved into another phase,
-        // don't perform a warmup respawn.
-        if (RoundManager.Instance == null)
-        {
-            yield break;
-        }
-
-        if (RoundManager.Instance.Phase.Value !=
-            RoundPhase.Warmup)
-        {
-            yield break;
-        }
-
-        PerformLocalSpawn(
-            spawnPosition,
-            spawnRotation
-        );
-
-        warmupDeathTriggered = false;
 
         Debug.Log(
-            $"Player {OwnerClientId} respawned after " +
-            $"Warmup death."
+            $"RespawnManager: Client {OwnerClientId} " +
+            $"touched Deadline during Warmup. " +
+            $"Teleporting to {spawnPoint.name}."
+        );
+
+        // ---------------------------------------------------------
+        // TELEPORT TO SPAWN
+        // ---------------------------------------------------------
+
+        ResetPlayerAtPosition(
+            spawnPoint.position,
+            spawnPoint.rotation
         );
     }
 
@@ -611,12 +596,15 @@ public class RespawnManager : NetworkBehaviour
     // NEW ROUND RESET
     // =========================================================
 
-    public void ResetForNewRound(
+    public void ResetPlayerAtPosition(
         Vector3 position,
         Quaternion rotation)
     {
         if (!IsServer)
             return;
+
+        spawnPosition = position;
+        spawnRotation = rotation;
 
         IsDead.Value = false;
 
@@ -637,14 +625,14 @@ public class RespawnManager : NetworkBehaviour
 
         // Tell the owning client to perform its
         // local movement/camera/animation reset.
-        ResetForNewRoundClientRpc(
+        ResetPlayerAtPositionClientRpc(
             position,
             rotation
         );
     }
 
     [ClientRpc]
-    private void ResetForNewRoundClientRpc(
+    private void ResetPlayerAtPositionClientRpc(
         Vector3 position,
         Quaternion rotation)
     {
@@ -674,7 +662,7 @@ public class RespawnManager : NetworkBehaviour
 
         DeathTriggeredLocally = false;
         deathRequested = false;
-        warmupDeathTriggered = false;
+        warmupTeleportRequested = false;
 
         // -----------------------------------------------------
         // DISABLE CHARACTER CONTROLLER DURING TELEPORT
@@ -757,7 +745,7 @@ public class RespawnManager : NetworkBehaviour
 
         if (CameraManager.Instance != null)
         {
-            CameraManager.Instance.ResetForNewRound(
+            CameraManager.Instance.ResetPlayerAtPosition(
                 transform,
                 rotation
             );

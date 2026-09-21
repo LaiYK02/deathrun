@@ -425,7 +425,7 @@ public class RoundManager : NetworkBehaviour
                 continue;
             }
 
-            respawnManager.ResetForNewRound(
+            respawnManager.ResetPlayerAtPosition(
                 spawnPoint.position,
                 spawnPoint.rotation
             );
@@ -670,28 +670,13 @@ public class RoundManager : NetworkBehaviour
         // -----------------------------------------------------
         // TIME LIMIT REACHED
         // -----------------------------------------------------
-        //
-        // Trapper survived the entire 5 minutes.
-        // The old Trapper becomes a Runner.
-        // A random current Runner becomes the new Trapper.
-        // -----------------------------------------------------
 
-        if (roundEndingBecauseTimeExpired)
-        {
-            ChooseReplacementTrapper();
+        ChooseReplacementTrapper();
 
-            Debug.Log(
-                "RoundManager: Time limit reached. " +
-                "A random Runner will become the new Trapper."
-            );
-        }
-        // -----------------------------------------------------
-        // TRAPPER DIED
-        // -----------------------------------------------------
-        else if (roundEndingBecauseTrapperDied)
-        {
-            ChooseReplacementTrapper();
-        }
+        Debug.Log(
+            "RoundManager: Selecting a new Trapper " +
+            "for the new round."
+        );
 
         roundEndingBecauseTrapperDied =
             false;
@@ -832,6 +817,11 @@ public class RoundManager : NetworkBehaviour
                 .ConnectedClients
                 .ContainsKey(clientId))
         {
+            Debug.LogError(
+                $"RoundManager: Client {clientId} " +
+                "is not connected."
+            );
+
             return false;
         }
 
@@ -843,18 +833,61 @@ public class RoundManager : NetworkBehaviour
             client.PlayerObject;
 
         if (oldPlayer == null)
+        {
+            Debug.LogError(
+                $"RoundManager: Client {clientId} " +
+                "does not have a PlayerObject."
+            );
+
             return false;
+        }
 
         PlayerRoleManager currentRole =
             oldPlayer.GetComponent<PlayerRoleManager>();
 
-        // If already the correct role,
-        // don't replace the network object.
+        // ---------------------------------------------------------
+        // ALREADY CORRECT ROLE
+        // ---------------------------------------------------------
+
         if (currentRole != null &&
             currentRole.Role.Value == desiredRole)
         {
             return true;
         }
+
+        // ---------------------------------------------------------
+        // GET CORRECT SPAWN POINT FIRST
+        // ---------------------------------------------------------
+
+        Transform spawnPoint;
+
+        if (desiredRole == PlayerRole.Trapper)
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetTrapperSpawnPoint();
+        }
+        else
+        {
+            spawnPoint =
+                SpawnPointsManager.Instance
+                    .GetSpawnPoint(clientId);
+        }
+
+        if (spawnPoint == null)
+        {
+            Debug.LogError(
+                $"RoundManager: Could not find " +
+                $"{desiredRole} spawn point for " +
+                $"Client {clientId}."
+            );
+
+            return false;
+        }
+
+        // ---------------------------------------------------------
+        // SELECT PREFAB
+        // ---------------------------------------------------------
 
         GameObject prefab =
             desiredRole == PlayerRole.Trapper
@@ -863,7 +896,7 @@ public class RoundManager : NetworkBehaviour
 
         Debug.Log(
             $"RoundManager: Switching Client {clientId} " +
-            $"to {desiredRole}."
+            $"to {desiredRole} at {spawnPoint.name}."
         );
 
         // ---------------------------------------------------------
@@ -873,14 +906,14 @@ public class RoundManager : NetworkBehaviour
         oldPlayer.Despawn(true);
 
         // ---------------------------------------------------------
-        // CREATE NEW PLAYER
+        // CREATE NEW PLAYER DIRECTLY AT SPAWN
         // ---------------------------------------------------------
 
         GameObject newPlayer =
             Instantiate(
                 prefab,
-                Vector3.zero,
-                Quaternion.identity
+                spawnPoint.position,
+                spawnPoint.rotation
             );
 
         NetworkObject newNetworkObject =
@@ -908,7 +941,7 @@ public class RoundManager : NetworkBehaviour
         );
 
         // ---------------------------------------------------------
-        // EXPLICITLY ASSIGN ROLE
+        // EXPLICIT ROLE
         // ---------------------------------------------------------
 
         PlayerRoleManager newRoleManager =
@@ -929,51 +962,31 @@ public class RoundManager : NetworkBehaviour
         }
 
         // ---------------------------------------------------------
-        // MOVE TO CORRECT ROUND SPAWN
+        // FORCE CORRECT ROUND SPAWN
         // ---------------------------------------------------------
 
-        Transform spawnPoint;
+        RespawnManager respawnManager =
+            newPlayer.GetComponent<RespawnManager>();
 
-        if (desiredRole == PlayerRole.Trapper)
+        if (respawnManager != null)
         {
-            spawnPoint =
-                SpawnPointsManager.Instance
-                    .GetTrapperSpawnPoint();
-        }
-        else
-        {
-            spawnPoint =
-                SpawnPointsManager.Instance
-                    .GetSpawnPoint(clientId);
-        }
-
-        if (spawnPoint != null)
-        {
-            RespawnManager respawnManager =
-                newPlayer.GetComponent<RespawnManager>();
-
-            if (respawnManager != null)
-            {
-                respawnManager.ResetForNewRound(
-                    spawnPoint.position,
-                    spawnPoint.rotation
-                );
-            }
-            else
-            {
-                newPlayer.transform.SetPositionAndRotation(
-                    spawnPoint.position,
-                    spawnPoint.rotation
-                );
-            }
-        }
-        else
-        {
-            Debug.LogError(
-                $"RoundManager: No spawn point found " +
-                $"for Client {clientId}."
+            respawnManager.ResetPlayerAtPosition(
+                spawnPoint.position,
+                spawnPoint.rotation
             );
         }
+        else
+        {
+            newPlayer.transform.SetPositionAndRotation(
+                spawnPoint.position,
+                spawnPoint.rotation
+            );
+        }
+
+        Debug.Log(
+            $"RoundManager: Client {clientId} is now " +
+            $"{desiredRole} at {spawnPoint.name}."
+        );
 
         return true;
     }
