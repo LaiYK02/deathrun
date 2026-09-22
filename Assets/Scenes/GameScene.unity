@@ -9966,9 +9966,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RoundManager
   ShowTopMostFoldoutHeaderGroup: 1
-  warmupDuration: 30
+  warmupDuration: 15
   trapperSelectionTime: 5
-  roundDuration: 25
+  roundDuration: 60
   nextRoundDelay: 5
   runnerPrefab: {fileID: 1449159570299268476, guid: 5f804552df156e64b82411d82563f460, type: 3}
   trapperPrefab: {fileID: 4950740309503940072, guid: 8d6a25bfcf04d4b4a93fcb5b1475398d, type: 3}

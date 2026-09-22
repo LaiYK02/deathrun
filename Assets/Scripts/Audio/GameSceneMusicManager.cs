@@ -381,7 +381,7 @@ public class GameSceneMusicManager : MonoBehaviour
 
         endRoundAudioSource.volume = GetEndRoundVolume();
 
-        endRoundAudioSource.loop = true;
+        endRoundAudioSource.loop = false;
 
         endRoundAudioSource.Play();
 
@@ -586,8 +586,6 @@ public class GameSceneMusicManager : MonoBehaviour
             PlayNextGameplayTrack();
         }
 
-        // If the round is currently ending, refresh the
-        // end-round music to use the current Funny Mode.
         if (endRoundMusicPlaying &&
             RoundManager.Instance != null &&
             RoundManager.Instance.Phase.Value ==
