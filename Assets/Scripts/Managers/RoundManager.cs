@@ -10,6 +10,13 @@ public enum RoundPhase
     Ending
 }
 
+public enum RoundEndResult
+{
+    None,
+    TrapperWin,
+    RunnersWin
+}
+
 public class RoundManager : NetworkBehaviour
 {
     public static RoundManager Instance { get; private set; }
@@ -59,6 +66,13 @@ public class RoundManager : NetworkBehaviour
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server
         );
+
+    public NetworkVariable<RoundEndResult> CurrentRoundEndResult =
+    new NetworkVariable<RoundEndResult>(
+        RoundEndResult.None,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
 
     public bool IsRoundActive =>
         Phase.Value == RoundPhase.Active;
@@ -565,6 +579,19 @@ public class RoundManager : NetworkBehaviour
 
         roundEndingBecauseTimeExpired =
             timeExpired;
+
+        // -----------------------------------------------------
+        // STORE ROUND RESULT
+        // -----------------------------------------------------
+
+        if (trapperDied)
+        {
+            CurrentRoundEndResult.Value = RoundEndResult.RunnersWin;
+        }
+        else
+        {
+            CurrentRoundEndResult.Value = RoundEndResult.TrapperWin;
+        }
 
         Phase.Value =
             RoundPhase.Ending;

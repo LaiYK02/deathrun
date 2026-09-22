@@ -637,6 +637,7 @@ GameObject:
   m_Component:
   - component: {fileID: 61585035}
   - component: {fileID: 61585034}
+  - component: {fileID: 61585036}
   - component: {fileID: 61585033}
   m_Layer: 0
   m_Name: GameSceneMusic
@@ -657,8 +658,41 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a35186746efbe445a9b44743a82feec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameSceneMusicManager
-  normalMusic: {fileID: 8300000, guid: dbe3ee5c8422c834da69ba62ae3dfb4b, type: 3}
-  funnyMusic: {fileID: 8300000, guid: cc7dcdd4c2ec9324caf4cf2b0f0ed408, type: 3}
+  normalGameplayMusic:
+  - {fileID: 8300000, guid: 801a9467b37d2e948b94165687911bd3, type: 3}
+  - {fileID: 8300000, guid: 49f0499521803bd4b9ece1ddd8301704, type: 3}
+  - {fileID: 8300000, guid: 8c1e1543452c275489f80bdb56c439e6, type: 3}
+  - {fileID: 8300000, guid: 94a5519972b26c74e8984ac4fe49011f, type: 3}
+  - {fileID: 8300000, guid: 4ee0a0540e0006f40bc1310057cb4744, type: 3}
+  - {fileID: 8300000, guid: 9629ada97b55dc04a8d97ae95d5ab964, type: 3}
+  - {fileID: 8300000, guid: 3e9ffb63070616a4493cf9836d43b283, type: 3}
+  - {fileID: 8300000, guid: dbe3ee5c8422c834da69ba62ae3dfb4b, type: 3}
+  - {fileID: 8300000, guid: a3898ce9dae8d90468857fa80c17515f, type: 3}
+  - {fileID: 8300000, guid: e705236226d3f174f8d16f51c2e6f684, type: 3}
+  - {fileID: 8300000, guid: 5204b064be3b7da4586ed1319c260977, type: 3}
+  funnyGameplayMusic:
+  - {fileID: 8300000, guid: 57efc22bee5effa4aaba01fb93ecdfc9, type: 3}
+  - {fileID: 8300000, guid: cc7dcdd4c2ec9324caf4cf2b0f0ed408, type: 3}
+  - {fileID: 8300000, guid: b2b23048f3d46fb428db20f6cb5e4cb5, type: 3}
+  - {fileID: 8300000, guid: 10bf1eaca5479044299fc04319597127, type: 3}
+  - {fileID: 8300000, guid: d5473e56bedaece44965e458f6dd86ba, type: 3}
+  - {fileID: 8300000, guid: c4adc8fff0c662c4f84c2e23ceb149ca, type: 3}
+  - {fileID: 8300000, guid: d7d43b3c7a36157459fe48a5ce836a37, type: 3}
+  - {fileID: 8300000, guid: d183f1ccc4bffcf4f83ba52627582cc6, type: 3}
+  - {fileID: 8300000, guid: 09ee899c6ed602f4393e9f9f2edad718, type: 3}
+  - {fileID: 8300000, guid: fb495f5e724be0348b778a457fe63f3e, type: 3}
+  - {fileID: 8300000, guid: 2f884b4577f409a4bba331bd84ee6ddc, type: 3}
+  - {fileID: 8300000, guid: a92e076d99277c442a085ac11186d5b3, type: 3}
+  - {fileID: 8300000, guid: 4e0a262915a1faa45826729e0b3fdb69, type: 3}
+  gameplayMusicVolume: 0.7
+  gameplayMusicStartDelay: 5
+  trapperWinNormalMusic: {fileID: 8300000, guid: 42a1831b08afc7641b5a0284e97d27ec, type: 3}
+  trapperWinFunnyMusic: {fileID: 8300000, guid: 941e039e15d3b7b45872616196e7daa3, type: 3}
+  runnersWinNormalMusic: {fileID: 8300000, guid: 712f7c4a6a065b94699372adf4d07516, type: 3}
+  runnersWinFunnyMusic: {fileID: 8300000, guid: 301eb473d246ce6498386cfb4d62e809, type: 3}
+  endRoundMusicVolume: 1
+  gameplayAudioSource: {fileID: 61585034}
+  endRoundAudioSource: {fileID: 61585036}
 --- !u!82 &61585034
 AudioSource:
   m_ObjectHideFlags: 0
@@ -671,7 +705,7 @@ AudioSource:
   OutputAudioMixerGroup: {fileID: 415419874274434249, guid: 8578a7dcaff8e1a458e97b3eded06770, type: 2}
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
-  m_PlayOnAwake: 1
+  m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
   Loop: 0
@@ -771,6 +805,103 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!82 &61585036
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 61585032}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 415419874274434249, guid: 8578a7dcaff8e1a458e97b3eded06770, type: 2}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &83482442
 GameObject:
   m_ObjectHideFlags: 0
@@ -7420,8 +7551,8 @@ Transform:
   m_GameObject: {fileID: 1091797064}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -25.93, y: 9.049, z: -17.65}
-  m_LocalScale: {x: 0.5, y: 0.7789634, z: 0.5}
+  m_LocalPosition: {x: -25.93, y: 8.9823, z: -17.65}
+  m_LocalScale: {x: 0.5, y: 0.7122841, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1287629534}
@@ -9861,6 +9992,11 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 18446744073709551615
+  CurrentRoundEndResult:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!4 &1482079307
 Transform:
   m_ObjectHideFlags: 0
