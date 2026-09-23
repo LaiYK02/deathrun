@@ -518,7 +518,33 @@ public class RespawnManager : NetworkBehaviour
             );
         }
 
+        // ---------------------------------------------------------
+        // DEATH BANNER
+        // ---------------------------------------------------------
+
+        string playerName = "Player";
+
+        LobbyPlayer lobbyPlayer =
+            GetComponent<LobbyPlayer>();
+
+        if (lobbyPlayer != null)
+        {
+            playerName =
+                lobbyPlayer.PlayerName.Value.ToString();
+        }
+
+        ShowDeathBannerClientRpc(playerName);
+
         PlayDeathSoundClientRpc();
+    }
+
+    [ClientRpc]
+    private void ShowDeathBannerClientRpc(string playerName)
+    {
+        if (DeathBannerManager.Instance == null)
+            return;
+
+        DeathBannerManager.Instance.ShowDeathBanner(playerName);
     }
 
     // =========================================================
