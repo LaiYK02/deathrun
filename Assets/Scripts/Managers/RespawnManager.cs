@@ -310,26 +310,14 @@ public class RespawnManager : NetworkBehaviour
             return;
         }
 
-        // -----------------------------------------------------
-        // ROUND ENDING
-        // -----------------------------------------------------
+        RequestDeath();
+    }
 
-        if (RoundManager.Instance.Phase.Value ==
-            RoundPhase.Ending)
-        {
-            return;
-        }
-
-        // -----------------------------------------------------
-        // ACTIVE ROUND
-        // -----------------------------------------------------
-
-        if (!RoundManager.Instance.IsRoundActive)
-            return;
-
-        if (IsDead.Value ||
-            deathRequested ||
-            DeathTriggeredLocally)
+    public void RequestDeath()
+    {
+        RoundManager roundManager = RoundManager.Instance;
+        if (!IsSpawned || !IsOwner || roundManager == null || !roundManager.IsRoundActive ||
+            IsDead.Value || deathRequested || DeathTriggeredLocally)
         {
             return;
         }
@@ -339,7 +327,7 @@ public class RespawnManager : NetworkBehaviour
         // Immediately stop local player control.
         EnterLocalDeathState();
 
-        RequestDeathServerRpc();
+        RequestDeathServerRpc(roundManager.CurrentRound.Value);
     }
 
     [ServerRpc]
@@ -490,10 +478,11 @@ public class RespawnManager : NetworkBehaviour
     // =========================================================
 
     [ServerRpc]
-    private void RequestDeathServerRpc()
+    private void RequestDeathServerRpc(int requestedRound)
     {
         if (RoundManager.Instance == null ||
-            !RoundManager.Instance.IsRoundActive)
+            !RoundManager.Instance.IsRoundActive ||
+            RoundManager.Instance.CurrentRound.Value != requestedRound)
         {
             deathRequested = false;
             return;

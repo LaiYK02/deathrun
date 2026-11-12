@@ -9,6 +9,7 @@ public class InputManager : MonoBehaviour
     public Vector2 LookInput { get; private set; }
 
     public bool JumpPressed { get; private set; }
+    public bool InteractPressed { get; private set; }
     public bool CameraTogglePressed { get; private set; }
 
     private void Awake()
@@ -27,6 +28,8 @@ public class InputManager : MonoBehaviour
         ReadMovementInput();
         ReadLookInput();
         ReadJumpInput();
+        InteractPressed = Keyboard.current != null &&
+                          Keyboard.current.eKey.wasPressedThisFrame;
         ReadCameraInput();
     }
 
