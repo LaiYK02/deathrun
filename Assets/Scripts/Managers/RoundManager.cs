@@ -22,6 +22,8 @@ public class RoundManager : NetworkBehaviour
     public static RoundManager Instance { get; private set; }
 
     public const ulong NoTrapper = ulong.MaxValue;
+    private const float FinishPadContactTolerance = 2f;
+    private const float FinishPadRetryInterval = 0.1f;
 
     [Header("Warmup")]
     [SerializeField] private float warmupDuration = 30f;
@@ -34,6 +36,9 @@ public class RoundManager : NetworkBehaviour
     [Header("Player Prefabs")]
     [SerializeField] private GameObject runnerPrefab;
     [SerializeField] private GameObject trapperPrefab;
+
+    [Header("Finish")]
+    [SerializeField] private Collider trapperEliminationPad;
 
     // =========================================================
     // NETWORK VARIABLES
@@ -74,6 +79,9 @@ public class RoundManager : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    public readonly NetworkVariable<int> RunnersScore = new(0);
+    public readonly NetworkVariable<int> TrapperScore = new(0);
+
     public bool IsRoundActive =>
         Phase.Value == RoundPhase.Active;
 
@@ -85,6 +93,8 @@ public class RoundManager : NetworkBehaviour
         new HashSet<ulong>();
 
     private Coroutine roundFlowCoroutine;
+    private int finishRequestedRound = -1;
+    private float nextFinishRequestTime;
 
     private bool roundEndingBecauseTrapperDied;
     private bool roundEndingBecauseTimeExpired;
@@ -155,6 +165,9 @@ public class RoundManager : NetworkBehaviour
 
     private IEnumerator StartGameFlow()
     {
+        RunnersScore.Value = 0;
+        TrapperScore.Value = 0;
+
         Phase.Value =
             RoundPhase.Warmup;
 
@@ -447,6 +460,60 @@ public class RoundManager : NetworkBehaviour
     }
 
     // =========================================================
+    // FINISH PAD
+    // =========================================================
+
+    public void TryActivateTrapperEliminationPad(Collider contact, RespawnManager runner)
+    {
+        int round = CurrentRound.Value;
+        if (trapperEliminationPad == null || contact != trapperEliminationPad ||
+            !IsSpawned || !IsRoundActive || TrapperClientId.Value == NoTrapper ||
+            (finishRequestedRound == round && Time.unscaledTime < nextFinishRequestTime) ||
+            runner.IsDead.Value || runner.DeathTriggeredLocally ||
+            !runner.TryGetComponent(out PlayerRoleManager role) || !role.IsRunner)
+        {
+            return;
+        }
+
+        finishRequestedRound = round;
+        nextFinishRequestTime = Time.unscaledTime + FinishPadRetryInterval;
+        ActivateTrapperEliminationPadRpc(round);
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void ActivateTrapperEliminationPadRpc(int requestedRound, RpcParams rpcParams = default)
+    {
+        if (trapperEliminationPad == null || !IsRoundActive || requestedRound != CurrentRound.Value ||
+            TrapperClientId.Value == NoTrapper)
+        {
+            return;
+        }
+
+        var clients = NetworkManager.ConnectedClients;
+        if (!clients.TryGetValue(rpcParams.Receive.SenderClientId, out var runner) ||
+            runner.PlayerObject == null || !runner.PlayerObject.IsSpawned ||
+            !runner.PlayerObject.TryGetComponent(out PlayerRoleManager runnerRole) || !runnerRole.IsRunner ||
+            !runner.PlayerObject.TryGetComponent(out RespawnManager runnerRespawn) || runnerRespawn.IsDead.Value)
+        {
+            return;
+        }
+
+        // Owner movement can reach the pad before its replicated position reaches the server.
+        if (trapperEliminationPad.bounds.SqrDistance(runner.PlayerObject.transform.position) >
+            FinishPadContactTolerance * FinishPadContactTolerance)
+        {
+            return;
+        }
+
+        if (clients.TryGetValue(TrapperClientId.Value, out var trapper) && trapper.PlayerObject != null &&
+            trapper.PlayerObject.TryGetComponent(out PlayerRoleManager trapperRole) && trapperRole.IsTrapper &&
+            trapper.PlayerObject.TryGetComponent(out RespawnManager trapperRespawn))
+        {
+            trapperRespawn.KillDuringActiveRound(requestedRound);
+        }
+    }
+
+    // =========================================================
     // PLAYER DEATH
     // =========================================================
 
@@ -571,7 +638,8 @@ public class RoundManager : NetworkBehaviour
         if (!IsServer)
             return;
 
-        if (Phase.Value == RoundPhase.Ending)
+        // Once the winner is announced, later deaths cannot change the result.
+        if (!IsRoundActive)
             return;
 
         roundEndingBecauseTrapperDied =
@@ -586,10 +654,12 @@ public class RoundManager : NetworkBehaviour
 
         if (trapperDied)
         {
+            RunnersScore.Value++;
             CurrentRoundEndResult.Value = RoundEndResult.RunnersWin;
         }
         else
         {
+            TrapperScore.Value++;
             CurrentRoundEndResult.Value = RoundEndResult.TrapperWin;
         }
 
@@ -688,6 +758,7 @@ public class RoundManager : NetworkBehaviour
         CurrentRound.Value++;
 
         deadPlayers.Clear();
+        CurrentRoundEndResult.Value = RoundEndResult.None;
 
         Debug.Log(
             $"RoundManager: Starting Round " +

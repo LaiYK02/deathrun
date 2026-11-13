@@ -287,11 +287,15 @@ public class RespawnManager : NetworkBehaviour
         if (!IsOwner)
             return;
 
-        if (!hit.collider.CompareTag("Deadline"))
+        RoundManager roundManager = RoundManager.Instance;
+        if (roundManager == null)
             return;
 
-        if (RoundManager.Instance == null)
+        if (!hit.collider.CompareTag("Deadline"))
+        {
+            roundManager.TryActivateTrapperEliminationPad(hit.collider, this);
             return;
+        }
 
         // -----------------------------------------------------
         // WARMUP
@@ -480,15 +484,14 @@ public class RespawnManager : NetworkBehaviour
     [ServerRpc]
     private void RequestDeathServerRpc(int requestedRound)
     {
-        if (RoundManager.Instance == null ||
-            !RoundManager.Instance.IsRoundActive ||
-            RoundManager.Instance.CurrentRound.Value != requestedRound)
-        {
-            deathRequested = false;
-            return;
-        }
+        KillDuringActiveRound(requestedRound);
+    }
 
-        if (!gameplayInitialized)
+    internal void KillDuringActiveRound(int requestedRound)
+    {
+        RoundManager roundManager = RoundManager.Instance;
+        if (!IsServer || !IsSpawned || !gameplayInitialized || roundManager == null ||
+            !roundManager.IsRoundActive || roundManager.CurrentRound.Value != requestedRound)
         {
             deathRequested = false;
             return;
@@ -500,12 +503,7 @@ public class RespawnManager : NetworkBehaviour
         IsDead.Value = true;
 
         // Notify the round manager.
-        if (RoundManager.Instance != null)
-        {
-            RoundManager.Instance.RegisterPlayerDeath(
-                OwnerClientId
-            );
-        }
+        roundManager.RegisterPlayerDeath(OwnerClientId);
 
         // ---------------------------------------------------------
         // DEATH BANNER

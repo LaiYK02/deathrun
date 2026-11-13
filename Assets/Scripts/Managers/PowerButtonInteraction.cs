@@ -9,6 +9,9 @@ public class PowerButtonInteraction : NetworkBehaviour
 
     [SerializeField] private SpriteRenderer buttonRenderer;
     [SerializeField] private Sprite usedSprite;
+    [SerializeField] private AudioSource feedbackSource;
+    [SerializeField] private AudioClip availableSound;
+    [SerializeField] private AudioClip usedSound;
 
     private readonly NetworkVariable<Activation> activation = new(new Activation(-1, 0d));
     private RoundManager roundManager;
@@ -65,9 +68,8 @@ public class PowerButtonInteraction : NetworkBehaviour
             return;
         }
 
-        int currentRound = roundManager.CurrentRound.Value;
         NetworkObject player = NetworkManager.LocalClient?.PlayerObject;
-        if (!CanActivate(currentRound, player))
+        if (!roundManager.IsRoundActive || !CanReachButton(player))
             return;
 
         Camera view = Camera.main;
@@ -75,23 +77,31 @@ public class PowerButtonInteraction : NetworkBehaviour
         if (view == null || !IsFacingButton(view.transform.position, view.transform.forward, buttonPosition))
             return;
 
-        ActivateRpc(currentRound);
+        int currentRound = roundManager.CurrentRound.Value;
+        bool alreadyUsed = activation.Value.Round == currentRound;
+        AudioClip feedback = alreadyUsed ? usedSound : availableSound;
+        if (feedbackSource != null && feedback != null)
+            feedbackSource.PlayOneShot(feedback);
+
+        if (!alreadyUsed)
+            ActivateRpc(currentRound);
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ActivateRpc(int requestedRound, RpcParams rpcParams = default)
     {
-        if (NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var sender) &&
-            CanActivate(requestedRound, sender.PlayerObject))
+        if (roundManager.IsRoundActive && requestedRound == roundManager.CurrentRound.Value &&
+            activation.Value.Round != requestedRound &&
+            NetworkManager.ConnectedClients.TryGetValue(rpcParams.Receive.SenderClientId, out var sender) &&
+            CanReachButton(sender.PlayerObject))
         {
             activation.Value = new Activation(requestedRound, NetworkManager.ServerTime.Time);
         }
     }
 
-    private bool CanActivate(int requestedRound, NetworkObject player)
+    private bool CanReachButton(NetworkObject player)
     {
-        if (!roundManager.IsRoundActive || requestedRound != roundManager.CurrentRound.Value ||
-            activation.Value.Round == requestedRound || player == null || !player.IsSpawned ||
+        if (player == null || !player.IsSpawned ||
             !player.TryGetComponent(out RespawnManager respawn) || respawn.IsDead.Value || respawn.DeathTriggeredLocally)
         {
             return false;

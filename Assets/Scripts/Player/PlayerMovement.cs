@@ -40,6 +40,9 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private Transform cameraTransform;
 
     private CharacterController characterController;
+    private RespawnManager respawnManager;
+    private RotatingCylinderTrap supportingCylinder;
+    private float groundNormalY;
 
     private Vector3 velocity;
 
@@ -72,6 +75,7 @@ public class PlayerMovement : NetworkBehaviour
     {
         characterController =
             GetComponent<CharacterController>();
+        respawnManager = GetComponent<RespawnManager>();
     }
 
     // =========================================================
@@ -580,10 +584,43 @@ public class PlayerMovement : NetworkBehaviour
 
     private void ApplyMovement()
     {
-        characterController.Move(
-            velocity *
-            Time.deltaTime
-        );
+        Vector3 cylinderPush = Vector3.zero;
+        if (supportingCylinder != null && characterController.isGrounded && velocity.y <= 0f &&
+            (respawnManager == null || !respawnManager.DeathTriggeredLocally))
+        {
+            cylinderPush = supportingCylinder.GetRiderVelocity(transform.position);
+            velocity = LimitOpposingMomentum(velocity, cylinderPush, maxSpeed);
+        }
+
+        // Move reports the supporting surface for the next frame.
+        supportingCylinder = null;
+        groundNormalY = Mathf.Cos(characterController.slopeLimit * Mathf.Deg2Rad);
+        characterController.Move((velocity + cylinderPush) * Time.deltaTime);
+    }
+
+    private static Vector3 LimitOpposingMomentum(Vector3 playerVelocity, Vector3 cylinderPush, float runSpeed)
+    {
+        float pushSpeed = cylinderPush.magnitude;
+        if (pushSpeed == 0f)
+            return playerVelocity;
+
+        Vector3 pushDirection = cylinderPush / pushSpeed;
+        float speedAlongPush = Vector3.Dot(playerVelocity, pushDirection);
+        float minimumSpeedAlongPush = -0.5f * Mathf.Min(pushSpeed, runSpeed);
+
+        if (speedAlongPush < minimumSpeedAlongPush)
+            playerVelocity += pushDirection * (minimumSpeedAlongPush - speedAlongPush);
+
+        return playerVelocity;
+    }
+
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.normal.y < groundNormalY)
+            return;
+
+        groundNormalY = hit.normal.y;
+        hit.collider.TryGetComponent(out supportingCylinder);
     }
 
     // =========================================================
@@ -607,5 +644,6 @@ public class PlayerMovement : NetworkBehaviour
     {
         velocity = Vector3.zero;
         jumpBufferTimer = 0f;
+        supportingCylinder = null;
     }
 }
